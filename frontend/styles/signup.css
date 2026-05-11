@@ -1,0 +1,476 @@
+/* ─────────────────────────────────────────────────────────────
+   signup.css  –  Kejarcita Signup Page
+   Place at: styles/signup.css
+───────────────────────────────────────────────────────────── */
+
+/* ── Page shell ──────────────────────────────────────────────────────────── */
+.signup-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+}
+
+/* ── Background ──────────────────────────────────────────────────────────── */
+.signup-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.signup-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.10);
+}
+
+.signup-bg-img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.signup-nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 40px;
+}
+
+.signup-logo {
+  object-fit: contain;
+  object-position: left center;
+}
+
+.signup-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.signup-nav-label {
+  color: #555;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.signup-nav-btn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: 2px solid #f5a623;
+  background: transparent;
+  color: #f5a623;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background 0.2s;
+  display: inline-block;
+}
+
+.signup-nav-btn:hover {
+  background: rgba(245, 166, 35, 0.08);
+}
+
+/* ── Content area ────────────────────────────────────────────────────────── */
+.signup-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 5;
+  padding: 20px 0 0;
+}
+
+/* ── Kid illustrations ───────────────────────────────────────────────────── */
+.signup-kid {
+  position: absolute;
+  bottom: 0;
+  width: 240px;
+  height: 360px;
+  pointer-events: none;
+}
+
+.signup-kid--left  { left: 0; }
+.signup-kid--right { right: 0; }
+
+.signup-kid-img {
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+.signup-card {
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.10);
+  padding: 40px 44px 36px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  margin-bottom: 40px;
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+.signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Titles ──────────────────────────────────────────────────────────────── */
+.signup-title {
+  font-weight: 800;
+  font-size: 22px;
+  color: #1a1a1a;
+  line-height: 1.3;
+  margin: 0 0 2px;
+}
+
+.signup-title--center {
+  text-align: center;
+}
+
+.signup-subtitle {
+  font-size: 15px;
+  color: #555;
+  font-weight: 500;
+  margin: 0;
+}
+
+/* ── Labels & Fields ─────────────────────────────────────────────────────── */
+.signup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signup-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #222;
+}
+
+.signup-hint {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 2px;
+}
+
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
+.signup-input {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.signup-input:focus {
+  border-color: #f5a623;
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+}
+
+/* ── Password wrapper ────────────────────────────────────────────────────── */
+.signup-input-wrap {
+  position: relative;
+}
+
+.signup-input--password {
+  padding-right: 44px;
+}
+
+.signup-eye-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.signup-eye-btn:hover {
+  color: #555;
+}
+
+/* ── Agreement checkbox ──────────────────────────────────────────────────── */
+.signup-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.signup-agree--small {
+  font-size: 14px;
+  font-weight: 600;
+  align-items: center;
+}
+
+.signup-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #f5a623;
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.signup-link {
+  color: #f5a623;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.signup-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Error ───────────────────────────────────────────────────────────────── */
+.signup-error {
+  background: #fff3f3;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Submit button ───────────────────────────────────────────────────────── */
+.signup-submit-btn {
+  width: 100%;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  background: #f5a623;
+  color: white;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.signup-submit-btn:hover:not(:disabled) {
+  background: #d4891a;
+}
+
+.signup-submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.signup-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* flex version used inside btn-row */
+.signup-submit-btn--flex {
+  width: auto;
+  flex: 1;
+}
+
+/* ── Back button ─────────────────────────────────────────────────────────── */
+.signup-back-btn {
+  padding: 13px 24px;
+  border-radius: 12px;
+  border: 2px solid #f5a623;
+  background: white;
+  color: #f5a623;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.signup-back-btn:hover {
+  background: #fef3e2;
+}
+
+/* ── Button row (back + next) ────────────────────────────────────────────── */
+.signup-btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* ── Bottom text links ───────────────────────────────────────────────────── */
+.signup-login-row {
+  text-align: center;
+  font-size: 14px;
+  color: #555;
+  font-weight: 600;
+  margin: 0;
+}
+
+.signup-link-btn {
+  background: none;
+  border: none;
+  color: #f5a623;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.signup-link-btn:hover {
+  text-decoration: underline;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.signup-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: signup-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes signup-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Role selector ───────────────────────────────────────────────────────── */
+.signup-role-row {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+.signup-role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 2.5px solid #e5e7eb;
+  background: white;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 130px;
+}
+
+.signup-role-card:hover {
+  border-color: #f5a623;
+}
+
+.signup-role-card--active {
+  border-color: #f5a623;
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.18);
+}
+
+.signup-role-img-wrap {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: #fef3e2;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signup-role-img {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
+
+.signup-role-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+}
+
+/* ── Date of birth row ───────────────────────────────────────────────────── */
+.signup-dob-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.signup-input--dob {
+  text-align: center;
+  padding: 12px 8px;
+}
+
+.signup-input--dob-day  { width: 70px; flex-shrink: 0; }
+.signup-input--dob-month { flex: 1; }
+.signup-input--dob-year { width: 90px; flex-shrink: 0; }
+
+/* ── Fade-in animation ───────────────────────────────────────────────────── */
+.fade-in {
+  animation: signup-fade-in 0.35s ease both;
+}
+
+@keyframes signup-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .signup-kid {
+    width: 130px;
+    height: 200px;
+  }
+
+  .signup-card {
+    padding: 28px 20px 24px;
+    margin: 0 16px 32px;
+  }
+
+  .signup-nav {
+    padding: 14px 20px;
+  }
+
+  .signup-role-row {
+    gap: 12px;
+  }
+
+  .signup-role-card {
+    min-width: 110px;
+    padding: 12px;
+  }
+
+  .signup-role-img-wrap {
+    width: 90px;
+    height: 90px;
+  }
+}

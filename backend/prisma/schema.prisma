@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PendingUser {
+  id             Int      @id @default(autoincrement())
+  email          String   @unique
+  name           String
+  password_hash  String
+  role_id        Int
+  otp_code       String
+  otp_expires_at DateTime
+  created_at     DateTime @default(now())
+}
+
+model User {
+  user_id     Int             @id @default(autoincrement())
+  name        String          @db.VarChar(255)
+  role_id     Int
+  created_at  DateTime        @default(now()) @db.Timestamp(6)
+  updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  questions   EssayQuestion[]
+  scoresGiven Score[]         @relation("ScoredBy")
+  answers     StudentAnswer[]
+  role        Role            @relation(fields: [role_id], references: [role_id])
+  userDetail  UserDetail?
+}
+
+model UserDetail {
+  detail_id     Int       @id @default(autoincrement())
+  user_id       Int       @unique
+  email         String    @unique @db.VarChar(255)
+  password_hash String    @db.VarChar(255)
+
+  otp_code       String?   @db.VarChar(10)     // Boleh kosong (?) jika tidak sedang login
+  otp_expires_at DateTime? @db.Timestamp(6)
+  
+  last_login    DateTime? @db.Timestamp(6)
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @default(now()) @db.Timestamp(6)
+  user          User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+}
+
+model Role {
+  role_id     Int      @id @default(autoincrement())
+  role_name   String   @unique @db.VarChar(100)
+  description String?
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+  users       User[]
+}
+
+model EssayQuestion {
+  question_id   Int             @id @default(autoincrement())
+  question_text String
+  weight        Decimal         @default(1.00) @db.Decimal(5, 2)
+  subject       String          @db.VarChar(255)
+  created_by    Int
+  created_at    DateTime        @default(now()) @db.Timestamp(6)
+  updated_at    DateTime        @default(now()) @db.Timestamp(6)
+  answerKey     AnswerKey?
+  user          User            @relation(fields: [created_by], references: [user_id])
+  answers       StudentAnswer[]
+}
+
+model AnswerKey {
+  key_id      Int           @id @default(autoincrement())
+  question_id Int           @unique
+  key_text    String
+  created_at  DateTime      @default(now()) @db.Timestamp(6)
+  updated_at  DateTime      @default(now()) @db.Timestamp(6)
+  question    EssayQuestion @relation(fields: [question_id], references: [question_id], onDelete: Cascade)
+}
+
+model StudentAnswer {
+  answer_id       Int           @id @default(autoincrement())
+  question_id     Int
+  user_id         Int
+  answer_text     String
+  word_count      Int           @default(0)
+  submission_date DateTime      @default(now()) @db.Timestamp(6)
+  created_at      DateTime      @default(now()) @db.Timestamp(6)
+  updated_at      DateTime      @default(now()) @db.Timestamp(6)
+  score           Score?
+  question        EssayQuestion @relation(fields: [question_id], references: [question_id])
+  student         User          @relation(fields: [user_id], references: [user_id])
+}
+
+model Score {
+  score_id    Int           @id @default(autoincrement())
+  answer_id   Int           @unique
+  ai_score    Decimal?      @db.Decimal(5, 2)
+  final_score Decimal?      @db.Decimal(5, 2)
+  scored_by   Int
+  scored_date DateTime      @default(now()) @db.Timestamp(6)
+  created_at  DateTime      @default(now()) @db.Timestamp(6)
+  updated_at  DateTime      @default(now()) @db.Timestamp(6)
+  answer      StudentAnswer @relation(fields: [answer_id], references: [answer_id], onDelete: Cascade)
+  teacher     User          @relation("ScoredBy", fields: [scored_by], references: [user_id])
+}

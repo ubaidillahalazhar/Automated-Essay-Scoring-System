@@ -1,0 +1,384 @@
+/* ─────────────────────────────────────────────────────────────
+   login.css  –  Kejarcita Login Page
+   Place at: app/login/login.css
+───────────────────────────────────────────────────────────── */
+
+/* ── Page shell ──────────────────────────────────────────────────────────── */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+}
+
+/* ── Background image ────────────────────────────────────────────────────── */
+.login-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* Subtle overlay - keeps doodles fully visible */
+.login-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.10);
+}
+
+.login-bg-img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.login-nav {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 40px;
+}
+
+.login-logo {
+  object-fit: contain;
+  object-position: left center;
+}
+
+.login-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-nav-label {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.login-nav-btn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: 2px solid #f5a623;
+  background: transparent;
+  color: #f5a623;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  transition: background 0.2s;
+  display: inline-block;
+}
+
+.login-nav-btn:hover {
+  background: rgba(245, 166, 35, 0.08);
+}
+
+/* ── Main content area ───────────────────────────────────────────────────── */
+.login-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 5;
+  padding: 20px 0 0;
+}
+
+/* ── Kid character images ────────────────────────────────────────────────── */
+.login-kid {
+  position: absolute;
+  bottom: 0;
+  width: 240px;
+  height: 360px;
+  pointer-events: none;
+}
+
+.login-kid--left  { left: 0; }
+.login-kid--right { right: 0; }
+
+.login-kid-img {
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 24px;
+  box-shadow: 0 8px 48px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(2px);
+  padding: 40px 44px 36px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  margin-bottom: 40px;
+}
+
+.login-title {
+  text-align: center;
+  font-weight: 800;
+  font-size: 26px;
+  color: #1a1a1a;
+  line-height: 1.35;
+  margin-bottom: 28px;
+}
+
+/* ── Form ────────────────────────────────────────────────────────────────── */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Fields & Inputs ─────────────────────────────────────────────────────── */
+.login-field {
+  position: relative;
+}
+
+.login-field--password {
+  position: relative;
+}
+
+.login-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1.5px solid #e5e7eb;
+  font-size: 14px;
+  font-family: inherit;
+  color: #333;
+  background: #fafafa;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+}
+
+.login-input:focus {
+  border-color: #f5a623;
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.15);
+}
+
+.login-field--password .login-input {
+  padding-right: 44px;
+}
+
+.login-eye-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #aaa;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.login-eye-btn:hover {
+  color: #555;
+}
+
+/* ── Remember me ─────────────────────────────────────────────────────────── */
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #555;
+  font-weight: 600;
+  user-select: none;
+}
+
+.login-checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: #f5a623;
+  cursor: pointer;
+}
+
+/* ── Error message ───────────────────────────────────────────────────────── */
+.login-error {
+  background: #fff3f3;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Submit button ───────────────────────────────────────────────────────── */
+.login-submit-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 12px;
+  border: none;
+  background: #f5a623;
+  color: white;
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s, transform 0.1s;
+  margin-top: 4px;
+}
+
+.login-submit-btn:hover:not(:disabled) {
+  background: #d4891a;
+}
+
+.login-submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+.login-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: login-spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Register row ────────────────────────────────────────────────────────── */
+.login-register-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.login-register-label {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.login-register-btn {
+  padding: 8px 20px;
+  border-radius: 10px;
+  border: 2px solid #f5a623;
+  background: white;
+  color: #f5a623;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: none;
+  display: inline-block;
+  transition: background 0.2s;
+}
+
+.login-register-btn:hover {
+  background: #fef3e2;
+}
+
+/* ── Text links ──────────────────────────────────────────────────────────── */
+.login-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.login-link-btn {
+  background: none;
+  border: none;
+  color: #f5a623;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.6;
+  transition: opacity 0.15s;
+}
+
+.login-link-btn:hover {
+  opacity: 0.75;
+  text-decoration: underline;
+}
+
+/* ── Demo buttons ────────────────────────────────────────────────────────── */
+.login-demo-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.login-demo-btn {
+  flex: 1;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1.5px dashed #f5a623;
+  background: #fffbf5;
+  color: #d97706;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+
+.login-demo-btn:hover {
+  background: #fef3e2;
+}
+
+/* ── Fade-in animation ───────────────────────────────────────────────────── */
+.fade-in {
+  animation: login-fade-in 0.4s ease both;
+}
+
+@keyframes login-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .login-kid {
+    width: 130px;
+    height: 200px;
+  }
+
+  .login-card {
+    padding: 32px 24px 28px;
+    margin: 0 16px 32px;
+  }
+
+  .login-nav {
+    padding: 14px 20px;
+  }
+}
