@@ -1,0 +1,467 @@
+/* ─────────────────────────────────────────────────────────────
+   student-dashboard.css  –  Kejarcita Student Dashboard
+   Place at: styles/student-dashboard.css
+───────────────────────────────────────────────────────────── */
+
+/* ── Page ────────────────────────────────────────────────────────────────── */
+.sd-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+  font-family: 'Nunito', 'Segoe UI', sans-serif;
+}
+
+/* ── Background ──────────────────────────────────────────────────────────── */
+.sd-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.sd-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 248, 238, 0.78);
+}
+
+.sd-bg-img {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.sd-nav {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 40px;
+  gap: 20px;
+}
+
+.sd-logo {
+  object-fit: contain;
+  object-position: left center;
+  flex-shrink: 0;
+}
+
+.sd-search-box {
+  flex: 1;
+  max-width: 340px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 8px 14px;
+}
+
+.sd-search-input {
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: #333;
+  width: 100%;
+  background: transparent;
+}
+
+.sd-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sd-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5a623;
+  color: white;
+  font-weight: 800;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sd-logout-btn {
+  padding: 7px 16px;
+  border-radius: 10px;
+  border: 1.5px solid #f5a623;
+  background: transparent;
+  color: #f5a623;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+
+.sd-logout-btn:hover {
+  background: rgba(245, 166, 35, 0.08);
+}
+
+/* ── Kid illustrations ───────────────────────────────────────────────────── */
+.sd-kid {
+  position: fixed;
+  bottom: 0;
+  width: 200px;
+  height: 320px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.sd-kid--left  { left: 0; }
+.sd-kid--right { right: 0; }
+
+.sd-kid-img {
+  object-fit: contain;
+  object-position: bottom center;
+}
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
+.sd-main {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 10px 260px 100px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Welcome card ────────────────────────────────────────────────────────── */
+.sd-welcome {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 28px 32px 24px;
+}
+
+.sd-welcome-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin: 0 0 4px;
+  line-height: 1.3;
+}
+
+.sd-welcome-name {
+  color: #f5a623;
+}
+
+.sd-welcome-sub {
+  font-size: 14px;
+  color: #888;
+  font-weight: 500;
+  margin: 0 0 16px;
+}
+
+.sd-progress-track {
+  width: 100%;
+  max-width: 340px;
+  height: 10px;
+  background: #f0f0f0;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.sd-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f5a623, #ffcc70);
+  border-radius: 999px;
+  transition: width 0.8s ease;
+}
+
+/* ── 4-card grid ─────────────────────────────────────────────────────────── */
+.sd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* ── Base card ───────────────────────────────────────────────────────────── */
+.sd-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: box-shadow 0.2s;
+}
+
+.sd-card:hover {
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.11);
+}
+
+.sd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sd-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.sd-badge {
+  background: #fff3d6;
+  color: #c77a00;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+/* ── Pelatihan card ──────────────────────────────────────────────────────── */
+.sd-course-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sd-course-icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff3d6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sd-course-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #222;
+  margin: 0 0 2px;
+}
+
+.sd-course-meta {
+  font-size: 12px;
+  color: #aaa;
+  font-weight: 500;
+  margin: 0;
+}
+
+.sd-pending-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px dashed #f0f0f0;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.sd-pending-item:hover {
+  opacity: 0.75;
+}
+
+.sd-pending-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a623;
+  flex-shrink: 0;
+}
+
+.sd-pending-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sd-pending-arrow {
+  font-size: 16px;
+  color: #f5a623;
+  font-weight: 700;
+}
+
+/* ── Tutor card ──────────────────────────────────────────────────────────── */
+.sd-tutor-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.sd-tutor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.sd-tutor-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  transition: transform 0.2s;
+  cursor: pointer;
+}
+
+.sd-tutor-avatar:hover {
+  transform: scale(1.08);
+}
+
+.sd-tutor-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+/* ── Chart card ──────────────────────────────────────────────────────────── */
+.sd-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sd-chart-svg {
+  width: 100%;
+  height: 60px;
+}
+
+.sd-chart-months {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.sd-chart-months span {
+  font-size: 11px;
+  color: #aaa;
+  font-weight: 600;
+}
+
+/* ── Favorit card ────────────────────────────────────────────────────────── */
+.sd-favorit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sd-favorit-text {
+  font-size: 14px;
+  color: #555;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sd-favorit-link {
+  font-size: 13px;
+  color: #f5a623;
+  font-weight: 700;
+  text-decoration: none;
+  margin-top: auto;
+}
+
+.sd-favorit-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Bottom nav ──────────────────────────────────────────────────────────── */
+.sd-bottom {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.sd-arrow-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #f5a623;
+  background: white;
+  color: #f5a623;
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.sd-arrow-btn:hover {
+  background: #f5a623;
+  color: white;
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────── */
+.fade-in {
+  animation: sd-fade-in 0.45s ease both;
+}
+
+.sd-grid.fade-in {
+  animation-delay: 0.1s;
+}
+
+@keyframes sd-fade-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sd-main {
+    padding: 10px 20px 120px;
+  }
+
+  .sd-kid {
+    width: 120px;
+    height: 190px;
+  }
+
+  .sd-nav {
+    padding: 12px 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sd-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-search-box {
+    display: none;
+  }
+
+  .sd-welcome {
+    padding: 20px;
+  }
+
+  .sd-kid {
+    width: 90px;
+    height: 140px;
+  }
+}
