@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
-import { MOCK_USERS } from "@/lib/store"
 import "@/styles/login.css"
 
 // ─── Eye Icons ────────────────────────────────────────────────────────────────
@@ -50,35 +49,18 @@ export default function LoginPage() {
 
   // ── Handle form submit ────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError("")
-    setSubmitting(true)
+  e.preventDefault();
+  setError("");
+  setSubmitting(true);
 
-    await new Promise((r) => setTimeout(r, 500))
+  const result = await login(email, password);
 
-    const result = await login(email, password)
-
-    if (!result.success) {
-      setError(result.message)
-      setSubmitting(false)
-      return
-    }
-
-    // ✅ Find role from MOCK_USERS directly (user state not updated yet this render)
-    const found = MOCK_USERS.find((u) => u.email === email)
-    const dest  = found?.role === "student" ? "/student/dashboard" : "/teacher/dashboard"
-    router.push(dest)
+  if (!result.success) {
+    setError(result.message);
+    setSubmitting(false);
+    return;
   }
-
-  function fillDemo(role: "student" | "teacher") {
-    if (role === "student") {
-      setEmail("budi@student.com")
-      setPassword("password123")
-    } else {
-      setEmail("dewi@guru.com")
-      setPassword("password123")
-    }
-  }
+}
 
   // Show nothing while auth state is loading from storage
   if (isLoading) return null
@@ -177,16 +159,6 @@ export default function LoginPage() {
               <button type="button" className="login-link-btn">Lupa kata sandi?</button>
               <button type="button" className="login-link-btn">
                 Apakah Anda tidak menerima instruksi cara melakukan konfirmasi?
-              </button>
-            </div>
-
-            {/* Demo buttons */}
-            <div className="login-demo-row">
-              <button type="button" onClick={() => fillDemo("student")} className="login-demo-btn">
-                🎒 Demo Siswa
-              </button>
-              <button type="button" onClick={() => fillDemo("teacher")} className="login-demo-btn">
-                📚 Demo Guru
               </button>
             </div>
 

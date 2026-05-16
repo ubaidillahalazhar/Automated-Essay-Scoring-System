@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-// ❌ Hapus MOCK_USERS dari import
+import Cookies from "js-cookie";
 import { type User, getStoredUser, setStoredUser } from "./store"
 
 // 1. Ubah tipe balikan menjadi Promise karena sekarang kita melakukan pemanggilan API yang butuh waktu (asynchronous)
@@ -40,10 +40,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.message || "Login gagal. Periksa email dan kata sandi." };
       }
 
-      // Jika backend mengirimkan token, simpan ke localStorage untuk keperluan proteksi rute
       if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
+  localStorage.setItem("token", data.token);
+  // Simpan di Cookie agar Middleware bisa membaca tiket ini
+  Cookies.set("token", data.token, { expires: 1 }); // Habis dalam 1 hari
+}
 
       // Ambil data user dari respons backend (sesuaikan 'data.user' dengan format backend Anda)
       const loggedInUser = data.user; 
@@ -92,10 +93,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-    setUser(null)
-    setStoredUser(null)
-    localStorage.removeItem("token") // Jangan lupa hapus token asli saat logout
-  }
+  setUser(null);
+  setStoredUser(null);
+  localStorage.removeItem("token");
+  Cookies.remove("token"); // Hapus juga cookienya
+}
 
   return (
     <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>

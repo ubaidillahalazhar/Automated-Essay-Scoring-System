@@ -24,7 +24,7 @@ model User {
   role_id     Int
   created_at  DateTime        @default(now()) @db.Timestamp(6)
   updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
-  questions   EssayQuestion[]
+  quizzes     Quiz[]
   scoresGiven Score[]         @relation("ScoredBy")
   answers     StudentAnswer[]
   role        Role            @relation(fields: [role_id], references: [role_id])
@@ -56,16 +56,30 @@ model Role {
   users       User[]
 }
 
+model Quiz {
+  quiz_id     Int             @id @default(autoincrement())
+  title       String          @db.VarChar(255)
+  description String?         @db.Text
+  subject     String          @db.VarChar(255)
+  created_by  Int
+  created_at  DateTime        @default(now()) @db.Timestamp(6)
+  updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  
+  // Relasi
+  teacher     User            @relation(fields: [created_by], references: [user_id], onDelete: Cascade)
+  questions   EssayQuestion[]
+}
+
 model EssayQuestion {
   question_id   Int             @id @default(autoincrement())
+  quiz_id       Int
   question_text String
   weight        Decimal         @default(1.00) @db.Decimal(5, 2)
-  subject       String          @db.VarChar(255)
-  created_by    Int
   created_at    DateTime        @default(now()) @db.Timestamp(6)
   updated_at    DateTime        @default(now()) @db.Timestamp(6)
+
+  quiz          Quiz            @relation(fields: [quiz_id], references: [quiz_id], onDelete: Cascade)
   answerKey     AnswerKey?
-  user          User            @relation(fields: [created_by], references: [user_id])
   answers       StudentAnswer[]
 }
 
