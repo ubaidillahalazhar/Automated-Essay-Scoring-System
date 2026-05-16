@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Cookies from "js-cookie";
 
 export default function VerifyOtpPage() {
   const router = useRouter()
@@ -31,10 +32,19 @@ export default function VerifyOtpPage() {
         return
       }
 
-      // Verifikasi berhasil! Arahkan user ke halaman login
-      alert("Verifikasi berhasil! Silakan masuk.")
-      router.push("/login")
+      if (response.ok) {
 
+  alert("Verifikasi Sukses! Akun Anda telah aktif. silakan login dengan email dan password yang sudah didaftarkan.");
+ 
+  router.push("/login");
+
+  if (data.user && data.user.role === "student") {
+        router.push("/student/dashboard");
+      } else {
+        router.push("/teacher/dashboard");
+      }
+
+}
     } catch (err) {
       setError("Gagal terhubung ke server.")
       setIsLoading(false)
