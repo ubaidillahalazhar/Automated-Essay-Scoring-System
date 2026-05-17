@@ -1,0 +1,7 @@
+venv/
+aiAPI/
+__pycache__/
+*.pyc
+qwen3-grader-merged-8bit/
+*.safetensors
+*.bin
