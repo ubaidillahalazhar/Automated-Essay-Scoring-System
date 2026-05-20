@@ -1,9 +1,12 @@
+require('dotenv').config();
 const express = require('express');
 const prisma = require('./config/prismaClient');
 const authRoutes = require('./routes/authRoutes');
 const cors = require('cors');
+const examRoutes = require('./routes/examRoutes');
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 app.use(cors({
     origin: 'http://localhost:3000', // Izinkan frontend Anda
@@ -13,6 +16,7 @@ app.use(cors({
 
 app.use(express.json()); // Agar bisa menerima format JSON
 app.use('/api/auth', authRoutes);
+app.use('/api/exams', examRoutes);
 
 // Endpoint untuk mengetes koneksi database
 app.get('/api/test-users', async (req, res) => {

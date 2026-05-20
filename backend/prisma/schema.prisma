@@ -61,6 +61,11 @@ model Quiz {
   title       String          @db.VarChar(255)
   description String?         @db.Text
   subject     String          @db.VarChar(255)
+
+  time_limit  Int             @default(30)
+  target_class String         @default("Kelas 10A") @db.VarChar(50)
+  due_date    DateTime        @db.Timestamp(6)
+
   created_by  Int
   created_at  DateTime        @default(now()) @db.Timestamp(6)
   updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
@@ -111,10 +116,11 @@ model Score {
   answer_id   Int           @unique
   ai_score    Decimal?      @db.Decimal(5, 2)
   final_score Decimal?      @db.Decimal(5, 2)
-  scored_by   Int
+  feedback    String?       @db.Text
+  scored_by   Int?
   scored_date DateTime      @default(now()) @db.Timestamp(6)
   created_at  DateTime      @default(now()) @db.Timestamp(6)
   updated_at  DateTime      @default(now()) @db.Timestamp(6)
   answer      StudentAnswer @relation(fields: [answer_id], references: [answer_id], onDelete: Cascade)
-  teacher     User          @relation("ScoredBy", fields: [scored_by], references: [user_id])
+  teacher     User?          @relation("ScoredBy", fields: [scored_by], references: [user_id])
 }
