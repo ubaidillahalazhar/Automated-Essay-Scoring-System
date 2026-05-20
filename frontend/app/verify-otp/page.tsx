@@ -1,15 +1,23 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import Image from "next/image"
 import Cookies from "js-cookie";
+import "@/styles/otp.css"
 
 export default function VerifyOtpPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const initialEmail = searchParams.get("email") || ""
+    setEmail(initialEmail)
+  }, [searchParams])
 
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault()
@@ -45,35 +53,44 @@ export default function VerifyOtpPage() {
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f3f4f6' }}>
-      <form onSubmit={handleVerify} style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Verifikasi Kode OTP</h2>
-        <p style={{ textAlign: 'center', marginBottom: '1.5rem', color: '#6b7280' }}>Masukkan email dan kode 6 digit yang dikirimkan ke email Anda.</p>
-        
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email Anda</label>
-          <input 
-            type="email" required
-            value={email} onChange={(e) => setEmail(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px' }}
-          />
+    <div className="otp-page">
+      <div className="otp-bg">
+        <Image src="/background.png" alt="" fill priority className="otp-bg-img" />
+      </div>
+      <div className="otp-content">
+        <form onSubmit={handleVerify} className="otp-card otp-form fade-in">
+          <h2 className="otp-title">Verifikasi Kode OTP</h2>
+          <p className="otp-subtitle">Masukkan kode 6 digit yang dikirimkan ke email Anda.</p>
+
+        <div className="otp-email-box">
+          {email ? (
+            <>
+              Kode OTP dikirim ke <strong>{email}</strong>
+            </>
+          ) : (
+            <>
+              Email belum ditemukan. Kembali ke pendaftaran dan buka halaman verifikasi dari sana.
+            </>
+          )}
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Kode OTP</label>
+          <div className="otp-field-block">
+          <label className="otp-field-label">Kode OTP</label>
           <input 
             type="text" required maxLength={6}
             value={otp} onChange={(e) => setOtp(e.target.value)}
-            style={{ width: '100%', padding: '0.5rem', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '1.2rem', textAlign: 'center', letterSpacing: '0.2rem' }}
+            className="otp-field-input"
           />
-        </div>
+          </div>
 
-        {error && <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
+          {error && <div className="otp-error">{error}</div>}
 
-        <button type="submit" disabled={isLoading} style={{ width: '100%', padding: '0.75rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-          {isLoading ? "Memverifikasi..." : "Verifikasi Sekarang"}
-        </button>
-      </form>
+          <button type="submit" disabled={isLoading || !email} className="otp-submit-btn">
+            {isLoading ? <span className="otp-spinner" /> : null}
+            {isLoading ? "Memverifikasi..." : "Verifikasi Sekarang"}
+          </button>
+        </form>
+      </div>
     </div>
   )
 }
