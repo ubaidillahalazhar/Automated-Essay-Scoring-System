@@ -41,9 +41,15 @@ export default function LoginPage() {
   // ── Auto-redirect if already logged in (e.g. stored session) ─────────────
   useEffect(() => {
     if (!isLoading && user) {
-      router.replace(
-        user.role === "student" ? "/student/dashboard" : "/teacher/dashboard"
-      )
+      if (user.role === "student") {
+        router.replace("/student/dashboard");
+      } else if (user.role === "teacher") {
+        router.replace("/teacher/dashboard");
+      } else if (user.role === "admin") {
+        // Jika belum ada dashboard admin, bisa diarahkan ke halaman lain, 
+        // tapi kita siapkan jalurnya dari sekarang.
+        router.replace("/admin/dashboard"); 
+      }
     }
   }, [user, isLoading, router])
 

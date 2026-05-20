@@ -37,13 +37,6 @@ export default function VerifyOtpPage() {
   alert("Verifikasi Sukses! Akun Anda telah aktif. silakan login dengan email dan password yang sudah didaftarkan.");
  
   router.push("/login");
-
-  if (data.user && data.user.role === "student") {
-        router.push("/student/dashboard");
-      } else {
-        router.push("/teacher/dashboard");
-      }
-
 }
     } catch (err) {
       setError("Gagal terhubung ke server.")

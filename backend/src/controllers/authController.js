@@ -11,8 +11,8 @@ const jwt = require('jsonwebtoken');
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-    // Map role: guru = 1, siswa = 2
-    const role_id = role === "teacher" ? 1 : 2;
+    // Map role: guru = 2, siswa = 3
+    const role_id = role === "teacher" ? 2 : 3;
 
     // Pastikan email belum punya akun resmi di UserDetail
     const existingUser = await prisma.userDetail.findUnique({ where: { email } });
@@ -123,8 +123,10 @@ const login = async (req, res) => {
 
     // 2. Validasi ketat menggunakan Percabangan Eksplisit
     if (roleId === 1) {
-      roleString = "teacher";
+      roleString = "admin";
     } else if (roleId === 2) {
+      roleString = "teacher";
+    } else if (roleId === 3) {
       roleString = "student";
     } else {
       // 🚨 Memunculkan error jika role_id tidak valid atau di luar angka 1 & 2
@@ -145,7 +147,7 @@ const login = async (req, res) => {
     res.status(200).json({
       message: "Login sukses!",
       token: token,
-      user: { id: userDetail.user_id, name: userDetail.user.name, email: userDetail.email, role: userDetail.role_id === 1 ? "teacher" : "student"}
+      user: { id: userDetail.user_id, name: userDetail.user.name, email: userDetail.email, role: roleString}
     });
 
   } catch (error) {
