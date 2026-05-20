@@ -97,8 +97,8 @@ export default function SignupPage() {
       setError(result.message)
       setIsLoading(false)
     } else {
-      // ✅ Signup berhasil → kembali ke halaman login
-      router.push("/verify-otp");
+      // ✅ Signup berhasil → lanjut ke verifikasi OTP dengan email yang sudah didaftarkan
+      router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
     }
   }
 

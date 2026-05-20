@@ -29,7 +29,9 @@ app.get('/api/test-users', async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "Gagal terhubung ke database" });
+    const resp = { error: "Gagal terhubung ke database" };
+    if (process.env.NODE_ENV !== 'production') resp.detail = error.message;
+    res.status(500).json(resp);
   }
 });
 
