@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 
-// Mengimpor fungsi-fungsi dari examController
+// Mengimpor fungsi-fungsi dari examController (Pastikan namanya persis sama)
 const { 
-  createQuiz, 
+  createQuizWithQuestions, 
   addQuestionWithKey, 
   getTeacherQuizzes 
 } = require('../controllers/examController');
@@ -12,11 +12,11 @@ const {
 // RUTE UNTUK GURU (TEACHER)
 // ==========================================
 
-// 1. Membuat kuis baru
+// 1. Membuat kuis beserta semua soalnya sekaligus
 // Endpoint: POST /api/exams/
-router.post('/', createQuiz);
+router.post('/', createQuizWithQuestions);
 
-// 2. Menambahkan soal dan kunci jawaban ke dalam kuis
+// 2. Menambahkan soal dan kunci jawaban secara manual/satuan
 // Endpoint: POST /api/exams/question
 router.post('/question', addQuestionWithKey);
 
