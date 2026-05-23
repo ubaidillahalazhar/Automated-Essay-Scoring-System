@@ -5,43 +5,65 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
-import { getStoredQuizzes, getStoredAttempts, saveQuizzes, type Quiz } from "@/lib/store"
-import { PlusSquare, FileText, Clock, Users, Trash2, ToggleLeft, ToggleRight } from "lucide-react"
+import { PlusSquare, FileText, Clock, Users, Trash2 } from "lucide-react"
+
+// 1. Buat tipe data (Interface) yang cocok dengan struktur Prisma Database
+interface QuizDB {
+  quiz_id: number;
+  title: string;
+  description: string | null;
+  subject: string;
+  time_limit: number;
+  target_class: string;
+  due_date: string;
+  _count: {
+    questions: number; // Menangkap jumlah soal dari agregasi Prisma
+  };
+}
 
 export default function TeacherQuizzes() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
-  const [quizzes, setQuizzes] = useState<Quiz[]>([])
-  const [attemptCounts, setAttemptCounts] = useState<Record<string, number>>({})
+  
+  // Gunakan state tipe baru
+  const [quizzes, setQuizzes] = useState<QuizDB[]>([])
+  const [isFetching, setIsFetching] = useState(true)
 
+  // Autentikasi
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "teacher")) router.replace("/login")
   }, [user, isLoading, router])
 
+  // 2. Fetch data dari Backend Express
   useEffect(() => {
-    if (!user) return
-    const all = getStoredQuizzes()
-    const mine = all.filter((q) => q.teacherId === user.id)
-    setQuizzes(mine)
-    const attempts = getStoredAttempts()
-    const counts: Record<string, number> = {}
-    attempts.forEach((a) => { counts[a.quizId] = (counts[a.quizId] || 0) + 1 })
-    setAttemptCounts(counts)
-  }, [user])
+    if (!user) return;
 
-  function toggleActive(quizId: string) {
-    const all = getStoredQuizzes()
-    const updated = all.map((q) => q.id === quizId ? { ...q, isActive: !q.isActive } : q)
-    saveQuizzes(updated)
-    setQuizzes(updated.filter((q) => q.teacherId === user?.id))
-  }
+    const fetchTeacherQuizzes = async () => {
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        // Memanggil API dengan ID guru yang sedang login
+        const response = await fetch(`${BACKEND_URL}/api/exams/teacher/${user.id}`);
 
-  function deleteQuiz(quizId: string) {
-    if (!confirm("Hapus kuis ini? Tindakan ini tidak dapat dibatalkan.")) return
-    const all = getStoredQuizzes()
-    const updated = all.filter((q) => q.id !== quizId)
-    saveQuizzes(updated)
-    setQuizzes(updated.filter((q) => q.teacherId === user?.id))
+        const result = await response.json();
+
+        if (response.ok) {
+          setQuizzes(result.data);
+        } else {
+          console.error("Gagal menarik data:", result.message);
+        }
+      } catch (error) {
+        console.error("Error koneksi ke backend:", error);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchTeacherQuizzes();
+  }, [user]);
+
+  // Fungsi Hapus (Hanya Mockup Sementara, karena kita belum buat API Delete-nya)
+  function deleteQuiz(quizId: number) {
+    alert(`Fitur hapus untuk Kuis ID ${quizId} akan segera dihubungkan ke database!`);
   }
 
   if (isLoading || !user) return null
@@ -60,70 +82,61 @@ export default function TeacherQuizzes() {
           </Link>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {quizzes.length === 0 ? (
-            <div className="col-span-full bg-white rounded-2xl border border-border p-12 text-center">
-              <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-7 h-7 text-primary" />
+        {isFetching ? (
+          <div className="text-center p-12 text-muted-foreground">Memuat kuis dari database...</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {quizzes.length === 0 ? (
+              <div className="col-span-full bg-white rounded-2xl border border-border p-12 text-center">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-7 h-7 text-primary" />
+                </div>
+                <p className="font-semibold text-foreground mb-1">Belum ada kuis</p>
+                <p className="text-sm text-muted-foreground mb-4">Mulai buat kuis pertamamu.</p>
+                <Link href="/teacher/create-quiz" className="inline-block px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors">
+                  Buat Kuis Sekarang
+                </Link>
               </div>
-              <p className="font-semibold text-foreground mb-1">Belum ada kuis</p>
-              <p className="text-sm text-muted-foreground mb-4">Mulai buat kuis pertamamu.</p>
-              <Link href="/teacher/create-quiz" className="inline-block px-5 py-2.5 bg-primary text-primary-foreground text-sm font-semibold rounded-xl hover:bg-primary/90 transition-colors">
-                Buat Kuis Sekarang
-              </Link>
-            </div>
-          ) : (
-            quizzes.map((quiz) => (
-              <div key={quiz.id} className="bg-white rounded-2xl border border-border p-5 flex flex-col gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-primary" />
+            ) : (
+              quizzes.map((quiz) => (
+                <div key={quiz.quiz_id} className="bg-white rounded-2xl border border-border p-5 flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-foreground leading-tight">{quiz.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{quiz.subject} • {quiz.target_class}</p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-foreground leading-tight">{quiz.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{quiz.subject} • {quiz.class}</p>
+
+                  {quiz.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{quiz.description}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {quiz.time_limit} menit</span>
+                    <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {quiz._count.questions} soal</span>
+                    <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> 0 pengumpulan</span>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${quiz.isActive ? "bg-green-50 text-green-700" : "bg-muted text-muted-foreground"}`}>
-                    {quiz.isActive ? "Aktif" : "Nonaktif"}
-                  </span>
-                </div>
 
-                {quiz.description && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">{quiz.description}</p>
-                )}
+                  <div className="text-xs text-muted-foreground">
+                    Tenggat: {new Date(quiz.due_date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
+                  </div>
 
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {quiz.timeLimit} menit</span>
-                  <span>{quiz.questions.length} soal</span>
-                  <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {attemptCounts[quiz.id] || 0} pengumpulan</span>
+                  <div className="flex justify-end pt-1 border-t border-border mt-2">
+                    <button
+                      onClick={() => deleteQuiz(quiz.quiz_id)}
+                      className="flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Hapus
+                    </button>
+                  </div>
                 </div>
-
-                <div className="text-xs text-muted-foreground">
-                  Tenggat: {new Date(quiz.dueDate).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
-                </div>
-
-                <div className="flex gap-2 pt-1 border-t border-border">
-                  <button
-                    onClick={() => toggleActive(quiz.id)}
-                    className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {quiz.isActive
-                      ? <ToggleRight className="w-4 h-4 text-green-600" />
-                      : <ToggleLeft className="w-4 h-4" />}
-                    {quiz.isActive ? "Nonaktifkan" : "Aktifkan"}
-                  </button>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => deleteQuiz(quiz.id)}
-                    className="flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Hapus
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+              ))
+            )}
+          </div>
+        )}
       </main>
     </div>
   )

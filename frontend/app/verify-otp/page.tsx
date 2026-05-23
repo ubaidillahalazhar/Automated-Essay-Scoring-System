@@ -6,6 +6,8 @@ import Image from "next/image"
 import Cookies from "js-cookie";
 import "@/styles/otp.css"
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function VerifyOtpPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -26,7 +28,7 @@ export default function VerifyOtpPage() {
 
     try {
       // Menembak ke endpoint verifikasi OTP di backend Anda
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/verify-otp`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp }),
