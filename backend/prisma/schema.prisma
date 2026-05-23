@@ -55,6 +55,28 @@ model Role {
   updated_at  DateTime @default(now()) @db.Timestamp(6)
   users       User[]
 }
+// ==========================================
+// A. TABEL MASTER TINGKATAN KELAS (Global)
+// ==========================================
+model Grade {
+  grade_id   Int          @id @default(autoincrement())
+  grade_name String       @unique // Isinya: "Kelas 1", "Kelas 2", ..., "Kelas 6"
+  quizzes    Quiz[]       // Relasi: Satu tingkatan kelas bisa memiliki banyak kuis
+  users      UserDetail[] // Relasi: Hubungan ke tingkat kelas murid
+}
+
+// ==========================================
+// B. TABEL MATA PELAJARAN (Terisolasi per Guru)
+// ==========================================
+model Subject {
+  subject_id   Int      @id @default(autoincrement())
+  subject_name String   // Contoh: "Matematika", "Bahasa Indonesia"
+  teacher_id   Int      // Pemilik mata pelajaran ini
+  teacher      User     @relation(fields: [teacher_id], references: [user_id])
+  quizzes      Quiz[]   // Relasi: Satu mata pelajaran bisa dipakai di banyak kuis
+
+  @@unique([subject_name, teacher_id]) // Kunci Keamanan: Guru tidak bisa membuat nama mapel ganda yang sama persis
+}
 
 model Quiz {
   quiz_id     Int             @id @default(autoincrement())
@@ -69,6 +91,18 @@ model Quiz {
   created_by  Int
   created_at  DateTime        @default(now()) @db.Timestamp(6)
   updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+
+  // Relasi ke Guru Pembuat
+  created_by   Int
+  teacher      User            @relation(fields: [created_by], references: [user_id])
+  
+  // RELASI BARU 1: Menghubungkan ke ID Tingkat Kelas
+  grade_id     Int
+  grade_level  Grade           @relation(fields: [grade_id], references: [grade_id])
+  
+  // RELASI BARU 2: Menghubungkan ke ID Mata Pelajaran
+  subject_id   Int
+  subject      Subject         @relation(fields: [subject_id], references: [subject_id])
   
   // Relasi
   teacher     User            @relation(fields: [created_by], references: [user_id], onDelete: Cascade)

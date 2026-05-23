@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
-import { getStoredQuizzes, saveQuizzes, type Quiz, type Question } from "@/lib/store"
+import { type Question } from "@/lib/store"
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Save, CheckCircle2 } from "lucide-react"
 
 const EMPTY_QUESTION = (): Question => ({
@@ -22,17 +22,48 @@ export default function CreateQuizPage() {
   const [subject, setSubject] = useState("")
   const [description, setDescription] = useState("")
   const [timeLimit, setTimeLimit] = useState(30)
-  const [targetClass, setTargetClass] = useState("Kelas 10A")
+  
+  // PERUBAHAN 2: Default state diubah menjadi Kelas 1
+  const [targetClass, setTargetClass] = useState("Kelas 1")
+  
   const [dueDate, setDueDate] = useState("")
   const [questions, setQuestions] = useState<Question[]>([EMPTY_QUESTION()])
   const [expandedQ, setExpandedQ] = useState<string | null>(questions[0]?.id)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  
+  // STATE BARU: Menyimpan daftar mata pelajaran dari database
+  const [existingSubjects, setExistingSubjects] = useState<string[]>([])
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "teacher")) router.replace("/login")
   }, [user, isLoading, router])
+
+  // PERUBAHAN 1: Mengambil daftar kuis guru dari database untuk mengekstrak mata pelajaran
+  useEffect(() => {
+
+    if (!user) return;
+    const teacherId = user.id;
+
+    async function fetchExistingSubjects() {
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        const res = await fetch(`${BACKEND_URL}/api/exams/teacher/${teacherId}`);
+        const result = await res.json();
+
+        if (res.ok && result.data) {
+          // Mengambil nama mapel dan membuang duplikat menggunakan Set
+          const subjects = Array.from(new Set(result.data.map((q: any) => q.subject)));
+          setExistingSubjects(subjects as string[]);
+        }
+      } catch (error) {
+        console.error("Gagal menarik daftar mata pelajaran:", error);
+      }
+    }
+
+    fetchExistingSubjects();
+  }, [user]);
 
   function addQuestion() {
     const q = EMPTY_QUESTION()
@@ -64,27 +95,51 @@ export default function CreateQuizPage() {
     const e = validate()
     setErrors(e)
     if (Object.keys(e).length > 0) return
+    
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 800))
-    const newQuiz: Quiz = {
-      id: `quiz-${Date.now()}`,
-      title,
-      subject,
-      description,
-      teacherId: user!.id,
-      teacherName: user!.name,
-      timeLimit,
-      class: targetClass,
-      dueDate,
-      createdAt: new Date().toISOString().split("T")[0],
-      isActive: true,
-      questions,
+    
+    try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+      const payload = {
+        title,
+        description,
+        subject,
+        timeLimit: Number(timeLimit),
+        targetClass,
+        dueDate,
+        created_by: user ? user.id : 1, 
+        questions: questions.map((q) => ({
+          text: q.text,
+          points: Number(q.points),
+          correctAnswer: q.correctAnswer
+        }))
+      }
+
+      const response = await fetch(`${BACKEND_URL}/api/exams`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || "Gagal menyimpan kuis ke database.");
+      }
+
+      setSaved(true)
+      setTimeout(() => router.push("/teacher/quizzes"), 1500)
+
+    } catch (err: any) {
+      console.error("❌ Error saat menyimpan kuis:", err);
+      setErrors({ global: err.message || "Terjadi kesalahan koneksi ke server." });
+      alert(err.message || "Gagal terhubung ke server backend.");
+    } finally {
+      setSaving(false)
     }
-    const existing = getStoredQuizzes()
-    saveQuizzes([...existing, newQuiz])
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => router.push("/teacher/quizzes"), 1500)
   }
 
   if (isLoading || !user) return null
@@ -108,7 +163,6 @@ export default function CreateQuizPage() {
           )}
 
           <div className="space-y-5">
-            {/* Basic info */}
             <div className="bg-white rounded-2xl border border-border p-5 space-y-4">
               <h2 className="font-bold text-foreground">Informasi Kuis</h2>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -122,16 +176,26 @@ export default function CreateQuizPage() {
                   />
                   {errors.title && <p className="text-xs text-destructive mt-1">{errors.title}</p>}
                 </div>
+                
+                {/* PERUBAHAN 1: Input Mata Pelajaran dengan Datalist (Searchable) */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Mata Pelajaran *</label>
                   <input
+                    list="subject-suggestions"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
-                    placeholder="Contoh: Matematika"
+                    placeholder="Pilih atau ketik mata pelajaran..."
                     className={`w-full px-4 py-2.5 rounded-xl border ${errors.subject ? "border-destructive" : "border-input"} bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm`}
                   />
+                  <datalist id="subject-suggestions">
+                    {existingSubjects.map((subj, index) => (
+                      <option key={index} value={subj} />
+                    ))}
+                  </datalist>
                   {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject}</p>}
                 </div>
+
+                {/* PERUBAHAN 2: Dropdown Kelas disamakan dengan Dashboard */}
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Kelas Target</label>
                   <select
@@ -139,11 +203,12 @@ export default function CreateQuizPage() {
                     onChange={(e) => setTargetClass(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
                   >
-                    {["Kelas 10A", "Kelas 10B", "Kelas 11A", "Kelas 11B", "Kelas 12A", "Kelas 12B"].map((c) => (
-                      <option key={c}>{c}</option>
+                    {["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"].map((c) => (
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Waktu (menit)</label>
                   <input
@@ -178,7 +243,6 @@ export default function CreateQuizPage() {
               </div>
             </div>
 
-            {/* Questions */}
             <div className="bg-white rounded-2xl border border-border p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -196,7 +260,6 @@ export default function CreateQuizPage() {
               <div className="space-y-3">
                 {questions.map((q, i) => (
                   <div key={q.id} className="border border-border rounded-xl overflow-hidden">
-                    {/* Question header */}
                     <button
                       type="button"
                       onClick={() => setExpandedQ(expandedQ === q.id ? null : q.id)}
@@ -211,7 +274,6 @@ export default function CreateQuizPage() {
                       {expandedQ === q.id ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                     </button>
 
-                    {/* Question body */}
                     {expandedQ === q.id && (
                       <div className="px-4 py-4 space-y-3">
                         <div>
@@ -271,7 +333,6 @@ export default function CreateQuizPage() {
               </button>
             </div>
 
-            {/* Save button */}
             <div className="flex gap-3 pb-8">
               <button
                 onClick={() => router.back()}
