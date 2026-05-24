@@ -149,18 +149,8 @@ export default function SignupPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email, phone & username"
+                  placeholder="Input Email"
                   required
-                  className="signup-input"
-                />
-              </div>
-
-              <div className="signup-field">
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder=""
                   className="signup-input"
                 />
               </div>
