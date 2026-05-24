@@ -29,6 +29,7 @@ model User {
   answers     StudentAnswer[]
   role        Role            @relation(fields: [role_id], references: [role_id])
   userDetail  UserDetail?
+  subjects    Subject[]
 }
 
 model UserDetail {
@@ -37,14 +38,17 @@ model UserDetail {
   email         String    @unique @db.VarChar(255)
   password_hash String    @db.VarChar(255)
 
-  otp_code       String?   @db.VarChar(10)     // Boleh kosong (?) jika tidak sedang login
+  otp_code       String?  @db.VarChar(10)     
   otp_expires_at DateTime? @db.Timestamp(6)
   
+  teaching_level String @default("SD")
   last_login    DateTime? @db.Timestamp(6)
   is_active     Boolean   @default(true)
   created_at    DateTime  @default(now()) @db.Timestamp(6)
   updated_at    DateTime  @default(now()) @db.Timestamp(6)
   user          User      @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  grade_id      Int?
+  grade         Grade?    @relation(fields: [grade_id], references: [grade_id])
 }
 
 model Role {
@@ -61,6 +65,7 @@ model Role {
 model Grade {
   grade_id   Int          @id @default(autoincrement())
   grade_name String       @unique // Isinya: "Kelas 1", "Kelas 2", ..., "Kelas 6"
+  school_level String
   quizzes    Quiz[]       // Relasi: Satu tingkatan kelas bisa memiliki banyak kuis
   users      UserDetail[] // Relasi: Hubungan ke tingkat kelas murid
 }
@@ -79,34 +84,28 @@ model Subject {
 }
 
 model Quiz {
-  quiz_id     Int             @id @default(autoincrement())
-  title       String          @db.VarChar(255)
-  description String?         @db.Text
-  subject     String          @db.VarChar(255)
-
-  time_limit  Int             @default(30)
-  target_class String         @default("Kelas 10A") @db.VarChar(50)
-  due_date    DateTime        @db.Timestamp(6)
-
-  created_by  Int
-  created_at  DateTime        @default(now()) @db.Timestamp(6)
-  updated_at  DateTime        @default(now()) @updatedAt @db.Timestamp(6)
-
-  // Relasi ke Guru Pembuat
+  quiz_id      Int             @id @default(autoincrement())
+  title        String          @db.VarChar(255)
+  description  String?         @db.Text
+  time_limit   Int             @default(30)
+  due_date     DateTime        @db.Timestamp(6)
+  created_at   DateTime        @default(now()) @db.Timestamp(6)
+  updated_at   DateTime        @default(now()) @updatedAt @db.Timestamp(6)
+  
+  // 1. Relasi ke Guru (Pastikan HANYA ADA SATU INI)
   created_by   Int
-  teacher      User            @relation(fields: [created_by], references: [user_id])
-  
-  // RELASI BARU 1: Menghubungkan ke ID Tingkat Kelas
-  grade_id     Int
-  grade_level  Grade           @relation(fields: [grade_id], references: [grade_id])
-  
-  // RELASI BARU 2: Menghubungkan ke ID Mata Pelajaran
+  teacher      User            @relation(fields: [created_by], references: [user_id], onDelete: Cascade)
+
+  // 2. Relasi ke Subject / Mapel (Kolom subject String yang lama DIHAPUS)
   subject_id   Int
   subject      Subject         @relation(fields: [subject_id], references: [subject_id])
-  
-  // Relasi
-  teacher     User            @relation(fields: [created_by], references: [user_id], onDelete: Cascade)
-  questions   EssayQuestion[]
+
+  // 3. Relasi ke grade (Asumsi kamu menambahkan ini)
+  grade_id     Int
+  grade        Grade @relation(fields: [grade_id], references: [grade_id])
+
+  // Relasi ke pertanyaan
+  questions    EssayQuestion[]
 }
 
 model EssayQuestion {

@@ -4,6 +4,8 @@ const prisma = require('./config/prismaClient');
 const authRoutes = require('./routes/authRoutes');
 const cors = require('cors');
 const examRoutes = require('./routes/examRoutes');
+const gradeRoutes = require('./routes/gradeRoutes');
+const subjectRoutes = require('./routes/subjectRoutes');
 
 const app = express();
 
@@ -16,6 +18,8 @@ app.use(cors({
 app.use(express.json()); // Agar bisa menerima format JSON
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
+app.use('/api/grades', gradeRoutes);     // <-- TAMBAH INI
+app.use('/api/subjects', subjectRoutes);
 
 // Endpoint untuk mengetes koneksi database
 app.get('/api/test-users', async (req, res) => {

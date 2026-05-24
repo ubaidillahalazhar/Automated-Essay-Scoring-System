@@ -8,9 +8,10 @@ const createQuizWithQuestions = async (req, res) => {
     const { 
       title, 
       description, 
-      subject, 
+      subject_id,
       timeLimit, 
       targetClass, 
+      grade_id,
       dueDate, 
       created_by, 
       questions 
@@ -24,8 +25,9 @@ const createQuizWithQuestions = async (req, res) => {
         data: {
           title,
           description,
-          subject,
-          time_limit: parseInt(timeLimit),       
+          subject_id: parseInt(subject_id),
+          time_limit: parseInt(timeLimit), 
+          grade_id: parseInt(grade_id),      
           target_class: targetClass,             
           due_date: new Date(dueDate),           
           created_by: parseInt(created_by)       

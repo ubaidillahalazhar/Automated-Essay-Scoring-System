@@ -29,7 +29,27 @@ async function main() {
     });
   }
 
+  await prisma.grade.createMany({
+    data: [
+{ grade_name: 'Kelas 1', school_level: 'SD' },
+      { grade_name: 'Kelas 2', school_level: 'SD' },
+      { grade_name: 'Kelas 3', school_level: 'SD' },
+      { grade_name: 'Kelas 4', school_level: 'SD' },
+      { grade_name: 'Kelas 5', school_level: 'SD' },
+      { grade_name: 'Kelas 6', school_level: 'SD' },
+      { grade_name: 'Kelas 7', school_level: 'SMP' },
+      { grade_name: 'Kelas 8', school_level: 'SMP' },
+      { grade_name: 'Kelas 9', school_level: 'SMP' },
+      { grade_name: 'Kelas 10', school_level: 'SMA' },
+      { grade_name: 'Kelas 11', school_level: 'SMA' },
+      { grade_name: 'Kelas 12', school_level: 'SMA' },
+    ],
+    skipDuplicates: true, // Abaikan jika kelas sudah pernah dibuat
+  });
+
+  console.log('🌱 Data master kelas berhasil ditanam!');
   console.log('✅ Data Role berhasil diseragamkan!');
+
 }
 
 main()

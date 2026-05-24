@@ -7,6 +7,16 @@ import { Sidebar } from "@/components/shared/sidebar"
 import { type Question } from "@/lib/store"
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Save, CheckCircle2 } from "lucide-react"
 
+interface GradeDB {
+  grade_id: number;
+  grade_name: string;
+}
+
+interface SubjectDB {
+  subject_id: number;
+  subject_name: string;
+}
+
 const EMPTY_QUESTION = (): Question => ({
   id: `q-${Date.now()}-${Math.random()}`,
   text: "",
@@ -19,12 +29,12 @@ export default function CreateQuizPage() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
   const [title, setTitle] = useState("")
-  const [subject, setSubject] = useState("")
+  const [subjectInput, setSubjectInput] = useState("")
   const [description, setDescription] = useState("")
   const [timeLimit, setTimeLimit] = useState(30)
   
-  // PERUBAHAN 2: Default state diubah menjadi Kelas 1
-  const [targetClass, setTargetClass] = useState("Kelas 1")
+  const [targetGradeId, setTargetGradeId] = useState<number>(1)
+  const [availableGrades, setAvailableGrades] = useState<GradeDB[]>([])
   
   const [dueDate, setDueDate] = useState("")
   const [questions, setQuestions] = useState<Question[]>([EMPTY_QUESTION()])
@@ -34,35 +44,41 @@ export default function CreateQuizPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   
   // STATE BARU: Menyimpan daftar mata pelajaran dari database
-  const [existingSubjects, setExistingSubjects] = useState<string[]>([])
+  const [existingSubjects, setExistingSubjects] = useState<SubjectDB[]>([])
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "teacher")) router.replace("/login")
   }, [user, isLoading, router])
 
-  // PERUBAHAN 1: Mengambil daftar kuis guru dari database untuk mengekstrak mata pelajaran
+  // Fetch data Kelas dan Mata Pelajaran dari database
   useEffect(() => {
-
     if (!user) return;
     const teacherId = user.id;
 
-    async function fetchExistingSubjects() {
+    async function fetchMasterData() {
       try {
         const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        const res = await fetch(`${BACKEND_URL}/api/exams/teacher/${teacherId}`);
-        const result = await res.json();
+        
+        // 1. Fetch Daftar Kelas
+        const resGrades = await fetch(`${BACKEND_URL}/api/grades`);
+        const dataGrades = await resGrades.json();
+        if (resGrades.ok && dataGrades.data) {
+          setAvailableGrades(dataGrades.data);
+          if (dataGrades.data.length > 0) setTargetGradeId(dataGrades.data[0].grade_id);
+        }
 
-        if (res.ok && result.data) {
-          // Mengambil nama mapel dan membuang duplikat menggunakan Set
-          const subjects = Array.from(new Set(result.data.map((q: any) => q.subject)));
-          setExistingSubjects(subjects as string[]);
+        // 2. Fetch Daftar Mata Pelajaran Guru
+        const resSubjects = await fetch(`${BACKEND_URL}/api/subjects/teacher/${teacherId}`);
+        const dataSubjects = await resSubjects.json();
+        if (resSubjects.ok && dataSubjects.data) {
+          setExistingSubjects(dataSubjects.data);
         }
       } catch (error) {
-        console.error("Gagal menarik daftar mata pelajaran:", error);
+        console.error("Gagal memuat data master:", error);
       }
     }
 
-    fetchExistingSubjects();
+    fetchMasterData();
   }, [user]);
 
   function addQuestion() {
@@ -82,7 +98,7 @@ export default function CreateQuizPage() {
   function validate() {
     const e: Record<string, string> = {}
     if (!title.trim()) e.title = "Judul kuis wajib diisi."
-    if (!subject.trim()) e.subject = "Mata pelajaran wajib diisi."
+    if (!subjectInput.trim()) e.subject = "Mata pelajaran wajib diisi."
     if (!dueDate) e.dueDate = "Tanggal tenggat wajib diisi."
     questions.forEach((q, i) => {
       if (!q.text.trim()) e[`q-${i}-text`] = "Pertanyaan wajib diisi."
@@ -100,15 +116,35 @@ export default function CreateQuizPage() {
     
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const teacherId = user ? user.id : 1;
+
+      // 1. Logika Cerdas Mata Pelajaran (Cek atau Buat Baru)
+      let finalSubjectId = null;
+      const matchedSubject = existingSubjects.find(
+        s => s.subject_name.toLowerCase() === subjectInput.trim().toLowerCase()
+      );
+
+      if (matchedSubject) {
+        finalSubjectId = matchedSubject.subject_id;
+      } else {
+        const resNewSubj = await fetch(`${BACKEND_URL}/api/subjects`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subject_name: subjectInput.trim(), teacher_id: teacherId })
+        });
+        const dataNewSubj = await resNewSubj.json();
+        if (!resNewSubj.ok) throw new Error(dataNewSubj.message || "Gagal membuat mata pelajaran.");
+        finalSubjectId = dataNewSubj.data.subject_id;
+      }
 
       const payload = {
         title,
         description,
-        subject,
+        subject_id: finalSubjectId,
         timeLimit: Number(timeLimit),
-        targetClass,
+        grade_id: targetGradeId,
         dueDate,
-        created_by: user ? user.id : 1, 
+        created_by: teacherId,
         questions: questions.map((q) => ({
           text: q.text,
           points: Number(q.points),
@@ -182,29 +218,31 @@ export default function CreateQuizPage() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">Mata Pelajaran *</label>
                   <input
                     list="subject-suggestions"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
+                    value={subjectInput}
+                    onChange={(e) => setSubjectInput(e.target.value)}
                     placeholder="Pilih atau ketik mata pelajaran..."
                     className={`w-full px-4 py-2.5 rounded-xl border ${errors.subject ? "border-destructive" : "border-input"} bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm`}
                   />
                   <datalist id="subject-suggestions">
-                    {existingSubjects.map((subj, index) => (
-                      <option key={index} value={subj} />
+                    {existingSubjects.map((subj) => (
+                      <option key={subj.subject_id} value={subj.subject_name} />
                     ))}
                   </datalist>
                   {errors.subject && <p className="text-xs text-destructive mt-1">{errors.subject}</p>}
                 </div>
 
                 {/* PERUBAHAN 2: Dropdown Kelas disamakan dengan Dashboard */}
-                <div>
+               <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">Kelas Target</label>
                   <select
-                    value={targetClass}
-                    onChange={(e) => setTargetClass(e.target.value)}
+                    value={targetGradeId}
+                    onChange={(e) => setTargetGradeId(Number(e.target.value))}
                     className="w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
                   >
-                    {["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"].map((c) => (
-                      <option key={c} value={c}>{c}</option>
+                    {availableGrades.map((g) => (
+                      <option key={g.grade_id} value={g.grade_id}>
+                        {g.grade_name}
+                      </option>
                     ))}
                   </select>
                 </div>
