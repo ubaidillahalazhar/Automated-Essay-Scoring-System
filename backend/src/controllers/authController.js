@@ -1,4 +1,3 @@
-// src/controllers/authController.js
 const prisma = require('../config/prismaClient');
 const { hashPassword, comparePassword } = require('../utils/bcryptUtils');
 const { sendOtpEmail } = require('../utils/emailUtils');
@@ -6,15 +5,12 @@ const jwt = require('jsonwebtoken');
 
 /**
  * 1. REGISTRASI (Tahap Parkir ke PendingUser)
- * Tugas: Simpan data sementara, buat OTP, dan kirim ke Gmail.
  */
 const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-    // Map role: guru = 2, siswa = 3
     const role_id = role === "teacher" ? 2 : 3;
 
-    // Pastikan email belum punya akun resmi di UserDetail
     const existingUser = await prisma.userDetail.findUnique({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ message: "Email sudah terdaftar dan aktif. Silakan login." });
@@ -22,9 +18,8 @@ const register = async (req, res) => {
 
     const hashedPassword = await hashPassword(password);
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // Berlaku 5 menit
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); 
 
-    // Parkir data di tabel PendingUser
     await prisma.pendingUser.upsert({
       where: { email: email },
       update: {
@@ -44,7 +39,6 @@ const register = async (req, res) => {
       }
     });
 
-    // Kirim OTP sungguhan ke Gmail
     await sendOtpEmail(email, otpCode);
 
     res.status(201).json({ message: "OTP berhasil dikirim ke email! Silakan cek inbox Anda." });
@@ -55,23 +49,19 @@ const register = async (req, res) => {
 };
 
 /**
- * 2. VERIFIKASI OTP (Tahap Peresmian Akun)
- * Tugas: Cek OTP, pindahkan ke tabel utama, dan langsung beri Tiket (JWT).
+ * 2. VERIFIKASI OTP (Tahap Peresmian Akun & Injeksi Data)
  */
 const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    // 1. Cari data di "Ruang Tunggu" (PendingUser)
     const pendingData = await prisma.pendingUser.findUnique({ where: { email } });
 
     if (!pendingData) return res.status(404).json({ message: "Data pendaftaran tidak ditemukan." });
     if (pendingData.otp_code !== otp) return res.status(401).json({ message: "Kode OTP salah." });
     if (new Date() > pendingData.otp_expires_at) return res.status(401).json({ message: "OTP kedaluwarsa." });
 
-    // 2. Transaksi: Pindahkan data ke tabel resmi dan hapus dari pending
     const [newUser] = await prisma.$transaction([
-      // Buat akun di tabel User & UserDetail sekaligus
       prisma.user.create({
         data: {
           name: pendingData.name,
@@ -84,25 +74,44 @@ const verifyOtp = async (req, res) => {
           }
         }
       }),
-      // Hapus dari ruang tunggu
       prisma.pendingUser.delete({ where: { email } })
     ]);
 
+    // Ambil ID dari akun yang baru saja dibuat
+    const userId = newUser.user_id || newUser.id; 
+
+    // Jika yang mendaftar adalah Guru (role_id === 2)
+    if (newUser.role_id === 2) {
+      await prisma.subject.createMany({
+        data: [
+          { subject_name: "Matematika", teacher_id: userId },
+          { subject_name: "Bahasa Indonesia", teacher_id: userId },
+          { subject_name: "IPA", teacher_id: userId },
+          { subject_name: "Olahraga", teacher_id: userId },
+        ]
+      });
+
+      await prisma.userDetail.update({
+        where: { user_id: userId },
+        data: { teaching_level: "SD" }
+      });
+    }
+
     res.status(200).json({ message: "Akun berhasil diverifikasi dan diaktifkan!"});
+    
   } catch (error) {
+    console.error("Error di verifyOtp:", error);
     res.status(500).json({ message: "Gagal memverifikasi akun." });
   }
 };
 
 /**
  * 3. LOGIN (Tahap Masuk Normal)
- * Tugas: Untuk user yang sudah aktif, cek password, dan beri Tiket (JWT).
  */
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Cari di tabel resmi (UserDetail)
     const userDetail = await prisma.userDetail.findUnique({
       where: { email: email },
       include: { user: true }
@@ -112,7 +121,6 @@ const login = async (req, res) => {
       return res.status(404).json({ message: "Email belum terdaftar atau belum diverifikasi." });
     }
 
-    // Cek kecocokan password
     const isMatch = await comparePassword(password, userDetail.password_hash);
     if (!isMatch) {
       return res.status(401).json({ message: "Password salah." });
@@ -121,7 +129,6 @@ const login = async (req, res) => {
     const roleId = userDetail.user.role_id;
     let roleString = "";
 
-    // 2. Validasi ketat menggunakan Percabangan Eksplisit
     if (roleId === 1) {
       roleString = "admin";
     } else if (roleId === 2) {
@@ -129,20 +136,16 @@ const login = async (req, res) => {
     } else if (roleId === 3) {
       roleString = "student";
     } else {
-      // 🚨 Memunculkan error jika role_id tidak valid atau di luar angka 1 & 2
       return res.status(403).json({ 
         message: "Akses ditolak: Peran pengguna tidak dikenali atau tidak valid." 
       });
     }
 
-    // 3. Berikan Tiket Masuk (JWT) jika lolos validasi
     const token = jwt.sign(
       { userId: userDetail.user_id, roleId: roleId },
       process.env.JWT_SECRET || 'RAHASIA_NEGARA',
       { expiresIn: '1d' }
     );
-
-    // 4. Kirim respons sukses dengan data peran yang sudah pasti aman
 
     res.status(200).json({
       message: "Login sukses!",
