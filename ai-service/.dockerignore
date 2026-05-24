@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Testing & cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+SETUP_TIM.md
+README.md
+
+# Test files (jangan masuk image)
+test_model.py
+filecheck.py
+quick_check.py
+
+# Local .env (jangan masuk image — pakai .env.example)
+.env.example
+
+# Models tetap di-copy via Dockerfile COPY models/
+# Tapi exclude file model lain selain yang resmi
+models/*.bak
+models/*.tmp

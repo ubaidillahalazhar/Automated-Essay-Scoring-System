@@ -1,0 +1,55 @@
+
+
+services:
+  ai-service:
+    # Untuk build dari source (kamu, developer):
+    image: aes-grader:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Untuk pull image yang sudah jadi (teman-teman):
+    # Comment build di atas, uncomment image di bawah, ganti nama image
+    # image: aes-grader:latest
+
+    container_name: aes-ai-grader
+    restart: unless-stopped
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      # Override .env yang ada di image kalau perlu
+      - HOST=0.0.0.0
+      - PORT=8000
+      - N_CTX=4096
+      - N_GPU_LAYERS=0
+      - N_THREADS=0
+      - USE_MLOCK=true
+      - MAX_TOKENS=512
+      - TEMPERATURE=0.3
+      - MODEL_PATH=./models/qwen3-grader-q_4_k_m.gguf
+
+    # Resource limits (sesuaikan dengan spec laptop teman)
+    # Model Qwen3-4B Q4_K_M butuh ~3-4 GB RAM saat loaded + inference
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+
+    # Healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+    # Logging — supaya tidak makan disk
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
