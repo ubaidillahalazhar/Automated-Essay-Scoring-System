@@ -1,49 +1,62 @@
 """
 FastAPI server untuk Grader AI.
-Setup     : GPU NVIDIA + Windows native (tanpa WSL, tanpa bitsandbytes)
-Quantize  : FP16 (no quantization) — butuh ~6-7 GB VRAM untuk Qwen 3B
-Model     : safetensors merged (hasil Unsloth save_pretrained_merged)
+Setup     : CPU-only (atau GPU opsional), Qwen3 GGUF format
+Library   : llama-cpp-python (bukan transformers)
+Model     : Qwen3 GGUF Q4_K_M (~2.5GB RAM untuk 4B)
 Run       : python main.py   ATAU   uvicorn main:app --host 0.0.0.0 --port 8000
-Docs      : http://localhost:8000/docs (Swagger UI auto-generated)
+Docs      : http://localhost:8000/docs
+
+Endpoint /grade dipanggil oleh backend/src/services/aiService.js
+Payload : {soal, kunci_jawaban, jawaban_siswa}
+Response: {skor, nilai_100, alasan}  -- HANYA 3 field sesuai aiService.js
 """
+import json
+import logging
+import os
 import re
 import time
-import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
-import torch
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from llama_cpp import Llama
 
 # ═══════════════════════════════════════════════════════════════════════
-# KONFIGURASI
+# LOAD CONFIG
 # ═══════════════════════════════════════════════════════════════════════
-# Karena folder model ADA DI DALAM folder API (sejajar dengan main.py),
-# pakai "./qwen3-grader-merged-8bit" — bukan "../"
-MODEL_PATH = "./qwen3-grader-merged-8bit"
+load_dotenv()
 
-MAX_NEW_TOKENS = 96
+MODEL_PATH    = os.getenv("MODEL_PATH", "D:/Automated-Essay-Scoring-System/ai-service/models/qwen3-grader-q_4_km.gguf")
+N_CTX         = int(os.getenv("N_CTX", "4096"))
+N_GPU_LAYERS  = int(os.getenv("N_GPU_LAYERS", "0"))      # 0 = CPU only
+N_THREADS     = int(os.getenv("N_THREADS", "0"))         # 0 = auto
+MAX_TOKENS    = int(os.getenv("MAX_TOKENS", "512"))
+TEMPERATURE   = float(os.getenv("TEMPERATURE", "0.3"))
+USE_MLOCK     = os.getenv("USE_MLOCK", "true").lower() in ("1", "true", "yes")
+HOST          = os.getenv("HOST", "0.0.0.0")
+PORT          = int(os.getenv("PORT", "8000"))
+
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # Express dev
-    "http://localhost:5173",   # Vite dev
-    # tambahkan domain production nanti
+    "http://localhost:3000",   # Next.js frontend
+    "http://localhost:5000",   # Express backend (jaga-jaga)
+    "http://localhost:5173",   # Vite (jaga-jaga)
+    # Tambahkan domain production di sini kalau perlu
 ]
 
-SYSTEM_PROMPT = """Kamu adalah asisten penilai jawaban ujian yang adil dan teliti.
-Tugasmu adalah membandingkan jawaban siswa dengan kunci jawaban yang tersedia, lalu memberikan skor numerik antara 0.0 hingga 1.0 berdasarkan KEMIRIPAN MAKNA dan KELENGKAPAN jawaban.
+SYSTEM_PROMPT = """Anda adalah asisten penilai jawaban esai yang adil dan teliti dalam Bahasa Indonesia.
 
-Panduan skor:
-  - 1.0       : Jawaban sangat lengkap & tepat, mencakup semua poin kunci
-  - 0.7 - 0.9 : Jawaban cukup baik, mencakup sebagian besar poin penting
-  - 0.4 - 0.6 : Jawaban sebagian benar atau kurang lengkap
-  - 0.1 - 0.3 : Jawaban hampir tidak relevan, sangat sedikit kesesuaian
-  - 0.0       : Jawaban sama sekali tidak relevan atau kosong
+Tugas Anda:
+1. Bandingkan jawaban siswa dengan kunci jawaban berdasarkan kebenaran konsep, kelengkapan, dan kejelasan.
+2. Beri skor 0-10 (boleh desimal seperti 7.5).
+3. Hitung nilai_100 = skor x 10.
+4. Berikan alasan singkat 1-2 kalimat dalam Bahasa Indonesia.
 
-Jawab HANYA dalam format berikut (satu desimal):
-Skor: <angka 0.0 - 1.0>
-Alasan: <penjelasan singkat dalam Bahasa Indonesia>"""
+PENTING: Balas HANYA dengan JSON valid, tanpa teks lain, tanpa markdown, tanpa code fence, tanpa thinking tags.
+Format wajib: {"skor": <0-10>, "nilai_100": <0-100>, "alasan": "<teks>"}"""
 
 # ═══════════════════════════════════════════════════════════════════════
 # LOGGING
@@ -55,7 +68,56 @@ logging.basicConfig(
 )
 log = logging.getLogger("grader-api")
 
-state = {"model": None, "tokenizer": None, "ready": False}
+state = {"llm": None, "ready": False}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# HELPERS
+# ═══════════════════════════════════════════════════════════════════════
+def _detect_cpu_threads() -> int:
+    """Pakai physical core (bukan logical). Hyperthreading sering bikin
+    llama.cpp lebih lambat, bukan lebih cepat."""
+    try:
+        import psutil
+        cores = psutil.cpu_count(logical=False)
+        if cores:
+            return cores
+    except ImportError:
+        pass
+    cores = os.cpu_count() or 4
+    return max(1, cores // 2)
+
+
+def _strip_thinking(text: str) -> str:
+    """Qwen3 reasoning variant kadang masih output <think>...</think>.
+    Hapus blok thinking biar JSON parser ga ketabrak."""
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<thinking>.*?</thinking>", "", text, flags=re.DOTALL)
+    return text
+
+
+def _extract_json(text: str) -> Optional[dict]:
+    """Brace-matching parser - robust terhadap teks ekstra di luar JSON."""
+    text = _strip_thinking(text)
+    text = re.sub(r"```(?:json)?", "", text).strip()
+
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # LIFESPAN
@@ -63,56 +125,66 @@ state = {"model": None, "tokenizer": None, "ready": False}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("=" * 60)
-    log.info("🚀 Memulai Grader API (FP16, Windows native)")
+    log.info("Memulai Grader API (Qwen3 GGUF)")
     log.info("=" * 60)
 
-    if not torch.cuda.is_available():
-        raise RuntimeError(
-            "GPU CUDA tidak terdeteksi. Pastikan driver NVIDIA & CUDA toolkit terinstall, "
-            "dan PyTorch versi CUDA (bukan CPU-only) terpasang."
-        )
+    if not os.path.isfile(MODEL_PATH):
+        log.error(f"Model GGUF tidak ditemukan di: {MODEL_PATH}")
+        log.error("Pastikan file .gguf sudah di-download dan MODEL_PATH benar di .env")
+        # Tetap yield supaya server hidup (biar /health bisa dicek), tapi grader belum siap
+        yield
+        return
 
-    log.info(f"🎮 GPU      : {torch.cuda.get_device_name(0)}")
-    log.info(f"💾 VRAM tot : {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
-    log.info(f"📂 Model    : {MODEL_PATH}")
+    threads = N_THREADS if N_THREADS > 0 else _detect_cpu_threads()
+    mode = "GPU" if N_GPU_LAYERS > 0 else "CPU"
+
+    log.info(f"Mode      : {mode}")
+    log.info(f"Model     : {MODEL_PATH}")
+    log.info(f"Context   : {N_CTX} tokens")
+    log.info(f"Threads   : {threads}")
+    log.info(f"GPU layers: {N_GPU_LAYERS}")
+    log.info(f"mlock     : {USE_MLOCK}")
 
     t0 = time.time()
-    log.info("⏳ Loading tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+    log.info("Loading GGUF model...")
 
-    log.info("⏳ Loading model (FP16, no quantization)...")
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_PATH,
-        device_map="auto",
-        torch_dtype=torch.float16,    # FP16 — paling cocok untuk GPU NVIDIA modern
-        low_cpu_mem_usage=True,
-    )
-    model.eval()
+    try:
+        llm = Llama(
+            model_path=MODEL_PATH,
+            n_ctx=N_CTX,
+            n_gpu_layers=N_GPU_LAYERS,
+            n_threads=threads,
+            n_batch=512,
+            use_mlock=USE_MLOCK,
+            use_mmap=True,
+            verbose=False,
+            chat_format="chatml",  # Qwen3 pakai ChatML
+        )
+    except Exception as e:
+        log.exception(f"Gagal load model: {e}")
+        yield
+        return
 
-    state["model"] = model
-    state["tokenizer"] = tokenizer
+    state["llm"] = llm
     state["ready"] = True
 
-    log.info(f"✅ Model siap dalam {time.time() - t0:.1f} detik")
-    log.info(f"💾 VRAM dipakai: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+    log.info(f"Model siap dalam {time.time() - t0:.1f} detik")
     log.info("=" * 60)
-    log.info("📡 API listening di http://0.0.0.0:8000")
-    log.info("📖 Swagger docs : http://localhost:8000/docs")
+    log.info(f"API listening di http://{HOST}:{PORT}")
+    log.info(f"Swagger docs   : http://localhost:{PORT}/docs")
     log.info("=" * 60)
 
     yield
 
-    log.info("👋 Shutting down, cleaning up GPU memory...")
-    state["model"] = None
-    state["tokenizer"] = None
+    log.info("Shutting down...")
+    state["llm"] = None
     state["ready"] = False
-    torch.cuda.empty_cache()
 
 
 app = FastAPI(
     title="Grader AI API",
-    description="API untuk menilai jawaban esai siswa otomatis menggunakan LLM fine-tuned.",
-    version="1.0.0",
+    description="API untuk menilai jawaban esai siswa menggunakan Qwen3 GGUF (CPU-optimized).",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -124,8 +196,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ═══════════════════════════════════════════════════════════════════════
-# SCHEMAS
+# SCHEMAS (SIMPLIFIED - 3 fields only)
 # ═══════════════════════════════════════════════════════════════════════
 class GradeRequest(BaseModel):
     soal: str = Field(..., min_length=1, max_length=2000,
@@ -145,108 +218,81 @@ class GradeRequest(BaseModel):
         }
     }
 
+
 class GradeResponse(BaseModel):
-    skor: float | None = Field(..., description="Skor 0.0 - 1.0, atau null jika gagal parse")
-    nilai_100: int | None = Field(..., description="Skor dikonversi ke skala 0-100")
-    kategori: str | None = Field(..., description="salah / sebagian / benar")
-    alasan: str | None = Field(..., description="Penjelasan singkat dari model")
-    waktu_proses_ms: int = Field(..., description="Lama inference dalam milidetik")
-    raw: str = Field(..., description="Output mentah model untuk debugging")
+    """Schema sesuai kontrak aiService.js - 3 field saja."""
+    skor: float = Field(..., ge=0, le=10, description="Skor 0-10")
+    nilai_100: float = Field(..., ge=0, le=100, description="Skor dikonversi ke skala 0-100")
+    alasan: str = Field(..., description="Penjelasan singkat dari model")
 
-class BatchItem(BaseModel):
-    id: str | int | None = None
-    soal: str
-    kunci_jawaban: str
-    jawaban_siswa: str
-
-class BatchRequest(BaseModel):
-    items: list[BatchItem] = Field(..., min_length=1, max_length=50,
-                                   description="Maksimal 50 item per batch")
 
 class HealthResponse(BaseModel):
     ok: bool
     ready: bool
-    gpu: str | None
-    vram_used_gb: float | None
-    vram_total_gb: float | None
+    model_path: Optional[str]
+    mode: Optional[str]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # CORE INFERENCE
 # ═══════════════════════════════════════════════════════════════════════
-def build_prompt(soal: str, kunci: str, jawaban: str) -> str:
+def _build_user_message(soal: str, kunci: str, jawaban: str) -> str:
     return (
-        f"Soal: {soal.strip()}\n\n"
-        f"Kunci Jawaban: {kunci.strip()}\n\n"
-        f"Jawaban Siswa: {jawaban.strip()}\n\n"
-        f"Berikan penilaian dalam format:\n"
-        f"Skor: <angka 0.0 - 1.0>\n"
-        f"Alasan: <penjelasan singkat>"
+        f"Soal:\n{soal.strip()}\n\n"
+        f"Kunci Jawaban:\n{kunci.strip()}\n\n"
+        f"Jawaban Siswa:\n{jawaban.strip()}\n\n"
+        f"Nilai jawaban siswa di atas. Balas hanya JSON tanpa thinking, tanpa penjelasan tambahan."
     )
 
-def parse_output(text: str) -> tuple[float | None, str | None]:
-    skor = None
-    skor_match = re.search(r'Skor\s*[:=]\s*([01](?:[.,]\d+)?)', text, re.IGNORECASE)
-    if skor_match:
-        try:
-            skor = float(skor_match.group(1).replace(',', '.'))
-            skor = max(0.0, min(1.0, skor))
-        except ValueError:
-            pass
 
-    alasan = None
-    alasan_match = re.search(r'Alasan\s*[:=]\s*(.+)', text, re.IGNORECASE | re.DOTALL)
-    if alasan_match:
-        alasan = alasan_match.group(1).strip()
-
-    return skor, alasan
-
-def kategori_dari_skor(skor: float | None) -> str | None:
-    if skor is None: return None
-    if skor < 0.35: return "salah"
-    if skor < 0.70: return "sebagian"
-    return "benar"
-
-def generate_skor(soal: str, kunci: str, jawaban: str) -> dict:
-    if not state["ready"]:
-        raise HTTPException(503, "Model belum siap, tunggu startup selesai.")
-
-    tokenizer = state["tokenizer"]
-    model = state["model"]
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user",   "content": build_prompt(soal, kunci, jawaban)},
-    ]
-
-    input_text = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
+def _raw_inference(soal: str, kunci: str, jawaban: str) -> str:
+    llm = state["llm"]
+    resp = llm.create_chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": _build_user_message(soal, kunci, jawaban)},
+        ],
+        max_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
+        top_p=0.9,
+        stop=["</s>", "<|im_end|>"],
     )
-    inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
+    return resp["choices"][0]["message"]["content"]
 
-    t0 = time.time()
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=MAX_NEW_TOKENS,
-            do_sample=False,
-            temperature=0.1,
-            pad_token_id=tokenizer.eos_token_id,
-        )
-    elapsed_ms = int((time.time() - t0) * 1000)
 
-    new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
-    response_text = tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+def _normalize(data: dict) -> GradeResponse:
+    """Pastikan output valid dan dalam range yang benar."""
+    skor = float(data.get("skor", 0))
+    skor = max(0.0, min(10.0, skor))
 
-    skor, alasan = parse_output(response_text)
+    nilai_100 = data.get("nilai_100")
+    if nilai_100 is None:
+        nilai_100 = skor * 10
+    nilai_100 = max(0.0, min(100.0, float(nilai_100)))
 
-    return {
-        "skor": skor,
-        "nilai_100": int(round(skor * 100)) if skor is not None else None,
-        "kategori": kategori_dari_skor(skor),
-        "alasan": alasan,
-        "waktu_proses_ms": elapsed_ms,
-        "raw": response_text,
-    }
+    alasan = str(data.get("alasan", "")).strip() or "Tidak ada alasan dari model."
+
+    return GradeResponse(skor=skor, nilai_100=nilai_100, alasan=alasan)
+
+
+def grade_essay(soal: str, kunci: str, jawaban: str) -> GradeResponse:
+    """Inference utama dengan retry jika JSON parsing gagal."""
+    last_raw = ""
+    for attempt in range(2):
+        raw = _raw_inference(soal, kunci, jawaban)
+        last_raw = raw
+        data = _extract_json(raw)
+        if data is not None:
+            return _normalize(data)
+        log.warning(f"Attempt {attempt + 1}: JSON parse gagal. Raw: {raw[:200]}")
+
+    # Fallback: jika 2x gagal parse, kembalikan skor 0 dengan alasan error
+    return GradeResponse(
+        skor=0.0,
+        nilai_100=0.0,
+        alasan=f"Model gagal mengembalikan JSON valid setelah 2 percobaan. Raw output: {last_raw[:150]}",
+    )
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # ENDPOINTS
@@ -255,66 +301,49 @@ def generate_skor(soal: str, kunci: str, jawaban: str) -> dict:
 def root():
     return {
         "name": "Grader AI API",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "model": "Qwen3 GGUF (CPU)",
         "endpoints": {
             "health": "GET /health",
             "grade": "POST /grade",
-            "grade_batch": "POST /grade-batch",
             "docs": "GET /docs"
         }
     }
 
+
 @app.get("/health", response_model=HealthResponse, tags=["meta"])
 def health():
-    cuda_ok = torch.cuda.is_available()
     return HealthResponse(
         ok=True,
         ready=state["ready"],
-        gpu=torch.cuda.get_device_name(0) if cuda_ok else None,
-        vram_used_gb=round(torch.cuda.memory_allocated() / 1e9, 2) if cuda_ok else None,
-        vram_total_gb=round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1) if cuda_ok else None,
+        model_path=MODEL_PATH if state["ready"] else None,
+        mode=("GPU" if N_GPU_LAYERS > 0 else "CPU") if state["ready"] else None,
     )
+
 
 @app.post("/grade", response_model=GradeResponse, tags=["grading"])
 def grade(req: GradeRequest):
-    """Nilai SATU jawaban siswa. Cocok untuk request real-time dari UI."""
+    """Nilai SATU jawaban siswa. Endpoint utama yang dipanggil oleh backend Node.js."""
+    if not state["ready"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Model belum siap. Cek /health dan log server.",
+        )
+
     try:
-        result = generate_skor(req.soal, req.kunci_jawaban, req.jawaban_siswa)
-        log.info(f"grade -> skor={result['skor']} ({result['waktu_proses_ms']}ms)")
+        t0 = time.time()
+        result = grade_essay(req.soal, req.kunci_jawaban, req.jawaban_siswa)
+        elapsed = int((time.time() - t0) * 1000)
+        log.info(f"grade -> skor={result.skor} nilai_100={result.nilai_100} ({elapsed}ms)")
         return result
-    except HTTPException:
-        raise
     except Exception as e:
         log.exception("Error saat grading")
-        raise HTTPException(500, f"Inference error: {e}")
-
-@app.post("/grade-batch", tags=["grading"])
-def grade_batch(req: BatchRequest):
-    """Nilai BANYAK jawaban sekaligus (max 50 per request)."""
-    results = []
-    t0 = time.time()
-    for item in req.items:
-        try:
-            r = generate_skor(item.soal, item.kunci_jawaban, item.jawaban_siswa)
-            results.append({"id": item.id, **r})
-        except Exception as e:
-            results.append({"id": item.id, "error": str(e)})
-
-    elapsed_ms = int((time.time() - t0) * 1000)
-    valid = sum(1 for r in results if "error" not in r)
-    log.info(f"grade-batch -> {valid}/{len(results)} sukses ({elapsed_ms}ms)")
-    return {
-        "total": len(results),
-        "sukses": valid,
-        "gagal": len(results) - valid,
-        "waktu_proses_ms": elapsed_ms,
-        "results": results,
-    }
+        raise HTTPException(status_code=500, detail=f"Inference error: {e}")
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# ENTRYPOINT — supaya `python main.py` bisa langsung jalan
+# ENTRYPOINT
 # ═══════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=False)
