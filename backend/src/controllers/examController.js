@@ -141,16 +141,26 @@ const getTeacherQuizzes = async (req, res) => {
 // ==========================================
 const getAvailableQuizzes = async (req, res) => {
   try {
-    // Nantinya bisa difilter berdasarkan target_class murid, 
-    // tapi sementara kita ambil semua kuis yang belum lewat tenggat waktu (due_date)
+    // Ambil parameter jenjang sekolah dari frontend (SD/SMP/SMA)
+    const { level } = req.query; 
+
+    if (!level) {
+      return res.status(400).json({ message: "Parameter jenjang (level) wajib disertakan." });
+    }
+
     const quizzes = await prisma.quiz.findMany({
       where: {
         due_date: {
-          gte: new Date() // Hanya tampilkan kuis yang deadline-nya belum lewat
+          gte: new Date() // Hanya kuis yang belum kedaluwarsa
+        },
+        // FILTER CERDAS: Cari kuis yang school_level di tabel Grade cocok dengan jenjang murid
+        grade: {
+          school_level: level
         }
       },
       include: {
-        teacher: { select: { name: true } }, // Tampilkan nama guru pembuat kuis
+        teacher: { select: { name: true } },
+        grade: { select: { grade_name: true } }, // Tarik data nama kelas (e.g. "Kelas 5")
         _count: { select: { questions: true } }
       },
       orderBy: { created_at: 'desc' }
@@ -158,6 +168,7 @@ const getAvailableQuizzes = async (req, res) => {
 
     res.status(200).json({ status: "success", data: quizzes });
   } catch (error) {
+    console.error("❌ Error getAvailableQuizzes:", error);
     res.status(500).json({ message: "Gagal mengambil kuis", error: error.message });
   }
 };
