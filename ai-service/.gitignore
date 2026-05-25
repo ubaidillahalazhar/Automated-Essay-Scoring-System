@@ -2,6 +2,16 @@ venv/
 aiAPI/
 __pycache__/
 *.pyc
+
+# Old safetensors model (jika masih ada)
 qwen3-grader-merged-8bit/
 *.safetensors
 *.bin
+
+# GGUF model files (besar, jangan masuk git!)
+models/*.gguf
+*.gguf
+
+# Environment
+.env
+.env.example
