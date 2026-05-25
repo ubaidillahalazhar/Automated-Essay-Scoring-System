@@ -6,10 +6,11 @@ export interface User {
   id: string
   name: string
   email: string
-  role: UserRole
+  role: "teacher" | "student"
   avatar?: string
   class?: string
   subject?: string
+  school_level?: string;
 }
 
 export interface Question {

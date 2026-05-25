@@ -5,11 +5,24 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
-import {
-  getStoredQuizzes, getStoredAttempts,
-  type Quiz, type QuizAttempt
-} from "@/lib/store"
+import { getStoredAttempts, type QuizAttempt } from "@/lib/store"
 import "@/styles/student-dashboard.css"
+
+interface TeacherDB {
+  name: string;
+}
+
+interface GradeLevelDB {
+  grade_name: string;
+}
+
+interface QuizDB {
+  quiz_id: number;
+  title: string;
+  teacher: TeacherDB;
+  grade: GradeLevelDB;
+  due_date: string;
+}
 
 // ─── Mini sparkline chart ─────────────────────────────────────────────────────
 function SparklineChart({ attempts }: { attempts: QuizAttempt[] }) {
@@ -72,40 +85,64 @@ function SparklineChart({ attempts }: { attempts: QuizAttempt[] }) {
 export default function StudentDashboard() {
   const { user, logout, isLoading } = useAuth()
   const router = useRouter()
-  const [quizzes, setQuizzes] = useState<Quiz[]>([])
+  const [quizzes, setQuizzes] = useState<QuizDB[]>([])
   const [attempts, setAttempts] = useState<QuizAttempt[]>([])
+  const [tutors, setTutors] = useState<{ label: string; bg: string }[]>([])
 
   // ── Auth guard → redirect to login if not a student ──
   useEffect(() => {
-    if (!isLoading && (!user || user.role !== "student")) {
-      router.replace("/login")
+    if (!user) return;
+
+    async function loadStudentData() {
+      try {
+        const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        
+        // Mengambil jenjang dari user (e.g. "SD", "SMP", "SMA")
+        const schoolLevel = user?.school_level || "SD"; 
+        
+        const res = await fetch(`${BACKEND_URL}/api/exams/student/available?level=${schoolLevel}`);
+        const data = await res.json();
+
+        if (res.ok && data.data) {
+          const fetchedQuizzes = data.data;
+          setQuizzes(fetchedQuizzes);
+
+          // Ekstraksi Tutor otomatis dari kuis yang tersedia
+          const uniqueTeachers = new Map();
+          const colors = ["#f5a623", "#e67e22", "#27ae60", "#2980b9", "#8e44ad"];
+          
+          fetchedQuizzes.forEach((q: QuizDB) => {
+            if (q.teacher && !uniqueTeachers.has(q.teacher.name)) {
+              uniqueTeachers.set(q.teacher.name, {
+                label: q.teacher.name,
+                bg: colors[uniqueTeachers.size % colors.length]
+              });
+            }
+          });
+          setTutors(Array.from(uniqueTeachers.values()));
+        }
+      } catch (error) {
+        console.error("Gagal memuat kuis murid:", error);
+      }
     }
-  }, [user, isLoading, router])
 
-  useEffect(() => {
-    setQuizzes(getStoredQuizzes())
-    setAttempts(getStoredAttempts())
-  }, [])
+    loadStudentData();
+    setAttempts(getStoredAttempts()); // Sementara attempts tetap mock sampai table pengerjaan siap
+  }, [user]);
 
-  if (isLoading || !user) return null
+  if (isLoading || !user) return null;
 
   // ── Derived state ──
   const myAttempts   = attempts.filter((a) => a.studentId === user.id)
-  const available    = quizzes.filter((q) => q.isActive && q.class === user.class)
-  const completedIds = new Set(myAttempts.map((a) => a.quizId))
-  const pending      = available.filter((q) => !completedIds.has(q.id))
+  const completedIds = new Set(myAttempts.map((a) => Number(a.quizId)))
+  const pending      = quizzes.filter((q) => !completedIds.has(q.quiz_id))
   const avgScore     = myAttempts.length
     ? Math.round(myAttempts.reduce((s, a) => s + (a.totalScore / a.maxScore) * 100, 0) / myAttempts.length)
     : 0
-  const progress = available.length
-    ? Math.min(100, Math.round((myAttempts.length / available.length) * 100))
+    
+  const progress = quizzes.length
+    ? Math.min(100, Math.round((myAttempts.length / quizzes.length) * 100))
     : 0
-
-  const tutors = [
-    { label: "Tutor 1", bg: "#f5a623" },
-    { label: "Tutor 2", bg: "#e67e22" },
-    { label: "Tutor 3", bg: "#27ae60" },
-  ]
 
   return (
     <div className="sd-page">
@@ -171,9 +208,11 @@ export default function StudentDashboard() {
               </div>
             </div>
             {pending.slice(0, 2).map((q) => (
-              <Link key={q.id} href={`/student/quiz/${q.id}`} className="sd-pending-item">
+              <Link key={q.quiz_id} href={`/student/quiz/${q.quiz_id}`} className="sd-pending-item">
                 <span className="sd-pending-dot" />
-                <span className="sd-pending-label">{q.title}</span>
+                <span className="sd-pending-label">
+                  {q.title} <span style={{ fontSize: '11px', color: '#aaa' }}>({q.grade?.grade_name})</span>
+                </span>
                 <span className="sd-pending-arrow">›</span>
               </Link>
             ))}
