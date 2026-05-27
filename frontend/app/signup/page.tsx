@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -8,6 +8,14 @@ import { useAuth } from "@/lib/auth-context"
 import "@/styles/signup.css"
 
 type Step = 1 | 2 | 3 | 4 | 5
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+interface Grade {
+  grade_id: number
+  grade_name: string
+  school_level: string
+}
 
 // ─── Eye Icons ────────────────────────────────────────────────────────────────
 function EyeIcon() {
@@ -27,7 +35,6 @@ function EyeOffIcon() {
   )
 }
 
-// ─── Main Signup Page ─────────────────────────────────────────────────────────
 export default function SignupPage() {
   const { signup } = useAuth()
   const router = useRouter()
@@ -41,7 +48,8 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword]       = useState(false)
   const [role, setRole]                       = useState<"student" | "teacher">("student")
-  const [school, setSchool]                   = useState("")
+  const [schoolLevel, setSchoolLevel]         = useState<string>("SD")
+  const [gradeId, setGradeId]                 = useState<number | null>(null)
   const [joinCommunity, setJoinCommunity]     = useState(false)
   const [birthDay, setBirthDay]               = useState("11")
   const [birthMonth, setBirthMonth]           = useState("September")
@@ -49,15 +57,51 @@ export default function SignupPage() {
   const [error, setError]                     = useState("")
   const [isLoading, setIsLoading]             = useState(false)
 
+  // Daftar grade dari backend
+  const [grades, setGrades] = useState<Grade[]>([])
+  const [loadingGrades, setLoadingGrades] = useState(false)
+
   const months = [
     "Januari","Februari","Maret","April","Mei","Juni",
     "Juli","Agustus","September","Oktober","November","Desember",
   ]
 
+  // Fetch daftar grade saat masuk step 3 (atau saat role berubah jadi student)
+  useEffect(() => {
+    if (role !== "student" || grades.length > 0) return
+
+    let cancelled = false
+    setLoadingGrades(true)
+
+    fetch(`${BACKEND_URL}/api/grades`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.data) setGrades(data.data)
+      })
+      .catch(err => console.error("Gagal memuat daftar kelas:", err))
+      .finally(() => {
+        if (!cancelled) setLoadingGrades(false)
+      })
+
+    return () => { cancelled = true }
+  }, [role, grades.length])
+
+  // Saat school_level berubah, reset grade_id (kecuali masih kompatibel)
+  useEffect(() => {
+    if (gradeId) {
+      const current = grades.find(g => g.grade_id === gradeId)
+      if (current && current.school_level !== schoolLevel) {
+        setGradeId(null)
+      }
+    }
+  }, [schoolLevel, gradeId, grades])
+
+  const gradesByLevel = grades.filter(g => g.school_level === schoolLevel)
+
   function next() { setError(""); setStep((s) => (s + 1) as Step) }
   function back() { setError(""); setStep((s) => (s - 1) as Step) }
 
-  // Step 1 – email + phone
   function handleStep1(e: React.FormEvent) {
     e.preventDefault()
     if (!email) { setError("Email wajib diisi."); return }
@@ -65,7 +109,6 @@ export default function SignupPage() {
     next()
   }
 
-  // Step 2 – username + password
   function handleStep2(e: React.FormEvent) {
     e.preventDefault()
     if (!username) { setError("Username wajib diisi."); return }
@@ -74,70 +117,67 @@ export default function SignupPage() {
     next()
   }
 
-  // Step 3 – role selection
   function handleStep3(e: React.FormEvent) {
     e.preventDefault()
+    if (role === "student" && !gradeId) {
+      setError("Silakan pilih kelasmu untuk melanjutkan.")
+      return
+    }
     next()
   }
 
-  // Step 4 – age / birthday
   function handleStep4(e: React.FormEvent) {
     e.preventDefault()
     next()
   }
 
-  // Step 5 – final submit → redirect to login on success
   async function handleStep5(e: React.FormEvent) {
     e.preventDefault()
     setError("")
     setIsLoading(true)
-    await new Promise((r) => setTimeout(r, 700))
-    const result = await signup(username, email, password, role, school)
+    await new Promise((r) => setTimeout(r, 500))
+
+    const result = await signup(
+      username,
+      email,
+      password,
+      role,
+      role === "student" && gradeId
+        ? grades.find(g => g.grade_id === gradeId)?.grade_name
+        : undefined,
+      role === "student" && gradeId ? gradeId : undefined
+    )
+
     if (!result.success) {
       setError(result.message)
       setIsLoading(false)
     } else {
-      // ✅ Signup berhasil → lanjut ke verifikasi OTP dengan email yang sudah didaftarkan
       router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
     }
   }
 
   return (
     <div className="signup-page">
-
-      {/* Background */}
       <div className="signup-bg">
         <Image src="/background.png" alt="" fill priority className="signup-bg-img" />
       </div>
 
-      {/* Navbar */}
       <nav className="signup-nav">
-        <Image
-          src="/logo kejarcita.png"
-          alt="Kejarcita"
-          width={160}
-          height={48}
-          className="signup-logo"
-          priority
-        />
+        <Image src="/logo kejarcita.png" alt="Kejarcita" width={160} height={48} className="signup-logo" priority />
         <div className="signup-nav-right">
           <span className="signup-nav-label">Punya akun?</span>
           <Link href="/login" className="signup-nav-btn">Masuk di sini</Link>
         </div>
       </nav>
 
-      {/* Content */}
       <div className="signup-content">
-
-        {/* Left kids */}
         <div className="signup-kid signup-kid--left">
           <Image src="/kidz 1.png" alt="" fill className="signup-kid-img" />
         </div>
 
-        {/* Card — key={step} triggers fade-in on each step change */}
         <div className="signup-card fade-in" key={step}>
 
-          {/* ── STEP 1: Email & Phone ── */}
+          {/* STEP 1: Email */}
           {step === 1 && (
             <form onSubmit={handleStep1} className="signup-form">
               <h1 className="signup-title">Kami senang menyambutmu!</h1>
@@ -146,20 +186,14 @@ export default function SignupPage() {
               <div className="signup-field">
                 <label className="signup-label">Email</label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Input Email"
-                  required
-                  className="signup-input"
+                  type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Input Email" required className="signup-input"
                 />
               </div>
 
               <label className="signup-agree">
                 <input
-                  type="checkbox"
-                  checked={agree}
-                  onChange={(e) => setAgree(e.target.checked)}
+                  type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)}
                   className="signup-checkbox"
                 />
                 <span>
@@ -177,24 +211,17 @@ export default function SignupPage() {
                 Sudah menjadi anggota?{" "}
                 <Link href="/login" className="signup-link">Masuk</Link>
               </p>
-              <button type="button" className="signup-link-btn">
-                Apakah Anda tidak menerima instruksi cara melakukan konfirmasi?
-              </button>
             </form>
           )}
 
-          {/* ── STEP 2: Username & Password ── */}
+          {/* STEP 2: Username + Password */}
           {step === 2 && (
             <form onSubmit={handleStep2} className="signup-form">
               <div className="signup-field">
                 <label className="signup-label">Username</label>
                 <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="username"
-                  required
-                  className="signup-input"
+                  type="text" value={username} onChange={(e) => setUsername(e.target.value)}
+                  placeholder="username" required className="signup-input"
                 />
               </div>
 
@@ -203,17 +230,10 @@ export default function SignupPage() {
                 <div className="signup-input-wrap">
                   <input
                     type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder=""
-                    required
-                    className="signup-input signup-input--password"
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    required className="signup-input signup-input--password"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="signup-eye-btn"
-                  >
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="signup-eye-btn">
                     {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
@@ -223,12 +243,8 @@ export default function SignupPage() {
               <div className="signup-field">
                 <label className="signup-label">Konfirmasi Kata Sandi</label>
                 <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Konfirmasi Kata Sandi"
-                  required
-                  className="signup-input"
+                  type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Konfirmasi Kata Sandi" required className="signup-input"
                 />
               </div>
 
@@ -241,7 +257,7 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* ── STEP 3: Role selection ── */}
+          {/* STEP 3: Role + Class selection */}
           {step === 3 && (
             <form onSubmit={handleStep3} className="signup-form">
               <h2 className="signup-title signup-title--center">Saya adalah...</h2>
@@ -249,18 +265,13 @@ export default function SignupPage() {
               <div className="signup-role-row">
                 {(["student", "teacher"] as const).map((r) => (
                   <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRole(r)}
+                    key={r} type="button" onClick={() => setRole(r)}
                     className={`signup-role-card ${role === r ? "signup-role-card--active" : ""}`}
                   >
                     <div className="signup-role-img-wrap">
                       <Image
                         src={r === "student" ? "/role siswa.png" : "/role guru.png"}
-                        alt={r}
-                        width={120}
-                        height={120}
-                        className="signup-role-img"
+                        alt={r} width={120} height={120} className="signup-role-img"
                       />
                     </div>
                     <span className="signup-role-label">{r === "student" ? "Siswa" : "Guru"}</span>
@@ -268,22 +279,54 @@ export default function SignupPage() {
                 ))}
               </div>
 
+              {/* Untuk SISWA: pilih jenjang + kelas */}
               {role === "student" && (
-                <div className="signup-field">
-                  <input
-                    type="text"
-                    value={school}
-                    onChange={(e) => setSchool(e.target.value)}
-                    placeholder="saat ini belajar di"
-                    className="signup-input"
-                  />
-                </div>
+                <>
+                  <div className="signup-field" style={{ marginTop: 16 }}>
+                    <label className="signup-label">Jenjang Sekolah</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {(["SD", "SMP", "SMA"] as const).map(lvl => (
+                        <button
+                          key={lvl} type="button"
+                          onClick={() => setSchoolLevel(lvl)}
+                          className="signup-input"
+                          style={{
+                            cursor: 'pointer',
+                            flex: 1,
+                            textAlign: 'center',
+                            fontWeight: schoolLevel === lvl ? 700 : 400,
+                            background: schoolLevel === lvl ? '#fef3e2' : '#fff',
+                            borderColor: schoolLevel === lvl ? '#f5a623' : '#e5e7eb',
+                          }}
+                        >
+                          {lvl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="signup-field">
+                    <label className="signup-label">Kelas</label>
+                    <select
+                      value={gradeId || ""}
+                      onChange={(e) => setGradeId(e.target.value ? parseInt(e.target.value) : null)}
+                      required className="signup-input"
+                    >
+                      <option value="">
+                        {loadingGrades ? "Memuat..." : `-- Pilih kelas ${schoolLevel} --`}
+                      </option>
+                      {gradesByLevel.map(g => (
+                        <option key={g.grade_id} value={g.grade_id}>{g.grade_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
+
               {role === "teacher" && (
                 <label className="signup-agree signup-agree--small">
                   <input
-                    type="checkbox"
-                    checked={joinCommunity}
+                    type="checkbox" checked={joinCommunity}
                     onChange={(e) => setJoinCommunity(e.target.checked)}
                     className="signup-checkbox"
                   />
@@ -300,35 +343,26 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* ── STEP 4: Age / Birthday ── */}
+          {/* STEP 4: Birthday */}
           {step === 4 && (
             <form onSubmit={handleStep4} className="signup-form">
               <h2 className="signup-title signup-title--center">Berapa usia kamu?</h2>
 
               <div className="signup-dob-row">
                 <input
-                  type="number"
-                  value={birthDay}
-                  onChange={(e) => setBirthDay(e.target.value)}
-                  min="1"
-                  max="31"
+                  type="number" value={birthDay} onChange={(e) => setBirthDay(e.target.value)}
+                  min="1" max="31"
                   className="signup-input signup-input--dob signup-input--dob-day"
                 />
                 <select
-                  value={birthMonth}
-                  onChange={(e) => setBirthMonth(e.target.value)}
+                  value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)}
                   className="signup-input signup-input--dob signup-input--dob-month"
                 >
-                  {months.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
+                  {months.map((m) => (<option key={m} value={m}>{m}</option>))}
                 </select>
                 <input
-                  type="number"
-                  value={birthYear}
-                  onChange={(e) => setBirthYear(e.target.value)}
-                  min="1990"
-                  max="2020"
+                  type="number" value={birthYear} onChange={(e) => setBirthYear(e.target.value)}
+                  min="1990" max="2020"
                   className="signup-input signup-input--dob signup-input--dob-year"
                 />
               </div>
@@ -342,7 +376,7 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* ── STEP 5: Confirm & Submit ── */}
+          {/* STEP 5: Confirm */}
           {step === 5 && (
             <form onSubmit={handleStep5} className="signup-form">
               <h2 className="signup-title signup-title--center">Siap untuk memulai?</h2>
@@ -350,7 +384,6 @@ export default function SignupPage() {
                 Klik "Daftar Sekarang" untuk membuat akunmu dan mulai belajar bersama Kejarcita!
               </p>
 
-              {/* Summary */}
               <div className="signup-summary">
                 <div className="signup-summary-row">
                   <span className="signup-summary-key">Email</span>
@@ -364,6 +397,14 @@ export default function SignupPage() {
                   <span className="signup-summary-key">Peran</span>
                   <span className="signup-summary-val">{role === "student" ? "Siswa" : "Guru"}</span>
                 </div>
+                {role === "student" && gradeId && (
+                  <div className="signup-summary-row">
+                    <span className="signup-summary-key">Kelas</span>
+                    <span className="signup-summary-val">
+                      {grades.find(g => g.grade_id === gradeId)?.grade_name} ({schoolLevel})
+                    </span>
+                  </div>
+                )}
                 <div className="signup-summary-row">
                   <span className="signup-summary-key">Tanggal lahir</span>
                   <span className="signup-summary-val">{birthDay} {birthMonth} {birthYear}</span>
@@ -374,28 +415,14 @@ export default function SignupPage() {
 
               <div className="signup-btn-row">
                 <button type="button" onClick={back} className="signup-back-btn">Kembali</button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="signup-submit-btn signup-submit-btn--flex"
-                >
-                  {isLoading ? (
-                    <><div className="signup-spinner" /> Memuat...</>
-                  ) : (
-                    "Daftar Sekarang"
-                  )}
+                <button type="submit" disabled={isLoading} className="signup-submit-btn signup-submit-btn--flex">
+                  {isLoading ? "Mendaftarkan..." : "Daftar Sekarang"}
                 </button>
               </div>
             </form>
           )}
 
         </div>
-
-        {/* Right kids */}
-        <div className="signup-kid signup-kid--right">
-          <Image src="/kidz 2.png" alt="" fill className="signup-kid-img" />
-        </div>
-
       </div>
     </div>
   )
