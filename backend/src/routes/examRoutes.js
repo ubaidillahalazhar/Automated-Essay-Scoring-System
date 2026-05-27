@@ -1,42 +1,34 @@
 const express = require('express');
 const router = express.Router();
 
-// Mengimpor fungsi-fungsi dari examController (Pastikan namanya persis sama)
-const { 
-  createQuizWithQuestions, 
-  addQuestionWithKey, 
+const {
+  createQuizWithQuestions,
+  addQuestionWithKey,
   getTeacherQuizzes,
   getAvailableQuizzes,
   getQuizQuestions,
-  submitAnswers
+  submitAnswers,
+  getAttemptResult,
+  getStudentAttempts,
+  getTeacherAttempts
 } = require('../controllers/examController');
 
 // ==========================================
-// RUTE UNTUK GURU (TEACHER)
+// RUTE UNTUK GURU
 // ==========================================
-
-// 1. Membuat kuis beserta semua soalnya sekaligus
-// Endpoint: POST /api/exams/
 router.post('/', createQuizWithQuestions);
-
-// 2. Menambahkan soal dan kunci jawaban secara manual/satuan
-// Endpoint: POST /api/exams/question
 router.post('/question', addQuestionWithKey);
-
-// 3. Mengambil daftar kuis berdasarkan ID Guru
-// Endpoint: GET /api/exams/teacher/:teacher_id
 router.get('/teacher/:teacher_id', getTeacherQuizzes);
+router.get('/teacher/:teacher_id/attempts', getTeacherAttempts); // BARU: list semua attempt siswa di quiz miliknya
 
 // ==========================================
-// RUTE UNTUK MURID (STUDENT)
+// RUTE UNTUK MURID
 // ==========================================
-// 1. Mengambil semua kuis yang tersedia
-router.get('/student/available', getAvailableQuizzes);
+router.get('/student/:student_id/available', getAvailableQuizzes);
+router.get('/student/:student_id/attempts', getStudentAttempts); // BARU: list attempt miliknya sendiri
 
-// 2. Mengambil soal untuk dikerjakan (Berdasarkan ID Kuis)
 router.get('/:quiz_id/start', getQuizQuestions);
-
-// 3. Mengumpulkan jawaban kuis
 router.post('/:quiz_id/submit', submitAnswers);
+router.get('/attempt/:attempt_token', getAttemptResult);
 
 module.exports = router;

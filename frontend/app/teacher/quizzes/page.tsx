@@ -12,13 +12,11 @@ interface QuizDB {
   quiz_id: number;
   title: string;
   description: string | null;
-  subject: string;
   time_limit: number;
-  target_class: string;
   due_date: string;
-  _count: {
-    questions: number; // Menangkap jumlah soal dari agregasi Prisma
-  };
+  subject: { subject_id: number; subject_name: string };
+  grade:   { grade_id: number; grade_name: string };
+  _count: { questions: number };
 }
 
 export default function TeacherQuizzes() {
@@ -106,7 +104,7 @@ export default function TeacherQuizzes() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-bold text-foreground leading-tight">{quiz.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">{quiz.subject} • {quiz.target_class}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{quiz.subject?.subject_name} • {quiz.grade?.grade_name}</p>
                     </div>
                   </div>
 

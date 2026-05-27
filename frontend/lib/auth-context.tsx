@@ -4,11 +4,17 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import Cookies from "js-cookie";
 import { type User, getStoredUser, setStoredUser } from "./store"
 
-// 1. Ubah tipe balikan menjadi Promise karena sekarang kita melakukan pemanggilan API yang butuh waktu (asynchronous)
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>
-  signup: (name: string, email: string, password: string, role: "student" | "teacher", extra?: string) => Promise<{ success: boolean; message: string }>
+  signup: (
+    name: string,
+    email: string,
+    password: string,
+    role: "student" | "teacher",
+    extra?: string,
+    grade_id?: number    // ← BARU: untuk siswa
+  ) => Promise<{ success: boolean; message: string }>
   logout: () => void
   isLoading: boolean
 }
@@ -26,7 +32,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false)
   }, [])
 
-  // 2. Logika Login Asli ke Backend
   async function login(email: string, password: string): Promise<{ success: boolean; message: string }> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
@@ -34,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
-      
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -42,37 +47,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (data.token) {
-  localStorage.setItem("token", data.token);
-  // Simpan di Cookie agar Middleware bisa membaca tiket ini
-  Cookies.set("token", data.token, { expires: 1 }); // Habis dalam 1 hari
-}
+        localStorage.setItem("token", data.token);
+        Cookies.set("token", data.token, { expires: 1 });
+      }
 
-      // Ambil data user dari respons backend (sesuaikan 'data.user' dengan format backend Anda)
-      const loggedInUser = data.user; 
-      
+      const loggedInUser = data.user;
       setUser(loggedInUser);
-      setStoredUser(loggedInUser); // Memperbarui session di seluruh aplikasi
-      
+      setStoredUser(loggedInUser);
+
       return { success: true, message: "Berhasil masuk!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
 
-  // 3. Logika Signup Asli ke Backend
   async function signup(
     name: string,
     email: string,
     password: string,
     role: "student" | "teacher",
-    extra?: string
+    extra?: string,
+    grade_id?: number    // ← BARU
   ): Promise<{ success: boolean; message: string }> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name, // Di parameter menggunakan 'name', kita kirim ke backend sebagai 'username'
+          name,
           email,
           password,
           role,
@@ -86,7 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.message || "Gagal mendaftar." };
       }
 
-      // Setelah mendaftar, biasanya tidak langsung login (butuh verifikasi OTP atau harus login manual)
+      // Simpan grade_id sementara di localStorage supaya halaman verify-otp
+      // bisa kirim ulang ke backend (PendingUser tidak menyimpan grade_id).
+      if (role === "student" && grade_id) {
+        localStorage.setItem("pending_grade_id", String(grade_id));
+        localStorage.setItem("pending_email", email);
+      }
+
       return { success: true, message: "Akun berhasil dibuat!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
@@ -94,11 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
-  setUser(null);
-  setStoredUser(null);
-  localStorage.removeItem("token");
-  Cookies.remove("token"); // Hapus juga cookienya
-}
+    setUser(null)
+    setStoredUser(null)
+    localStorage.removeItem("token")
+    Cookies.remove("token")
+  }
 
   return (
     <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>

@@ -1,7 +1,9 @@
+// File: backend/src/routes/gradeRoutes.js (BUAT BARU)
+
 const express = require('express');
 const router = express.Router();
-const { getGradesByLevel } = require('../controllers/gradeController');
+const { getAllGrades } = require('../controllers/gradeController');
 
-router.get('/', getGradesByLevel);
+router.get('/', getAllGrades);
 
 module.exports = router;

@@ -3,271 +3,256 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
-import { getStoredAttempts, type QuizAttempt } from "@/lib/store"
-import "@/styles/student-dashboard.css"
+import { Sidebar } from "@/components/shared/sidebar"
+import {
+  BookOpen, Trophy, Clock, TrendingUp, Sparkles, Loader2,
+  CheckCircle2, ChevronRight, Target, Award
+} from "lucide-react"
 
-interface TeacherDB {
-  name: string;
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+interface QuizFromDB {
+  quiz_id: number
+  title: string
+  description: string | null
+  time_limit: number
+  due_date: string
+  teacher?: { name: string } | null
+  subject?: { subject_name: string } | null
+  grade?: { grade_name: string; school_level: string } | null
+  _count?: { questions: number }
+  is_completed: boolean
 }
 
-interface GradeLevelDB {
-  grade_name: string;
+interface AttemptFromDB {
+  attempt_token: string
+  quiz_id: number
+  quiz_title: string
+  subject_name: string
+  total_score: number
+  max_score: number
+  completed_at: string
 }
 
-interface QuizDB {
-  quiz_id: number;
-  title: string;
-  teacher: TeacherDB;
-  grade: GradeLevelDB;
-  due_date: string;
-}
-
-// ─── Mini sparkline chart ─────────────────────────────────────────────────────
-function SparklineChart({ attempts }: { attempts: QuizAttempt[] }) {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May"]
-  const now = new Date()
-
-  const data = months.map((_, i) => {
-    const month = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1)
-    const m = month.getMonth()
-    const y = month.getFullYear()
-    const rel = attempts.filter((a) => {
-      const d = new Date(a.completedAt)
-      return d.getMonth() === m && d.getFullYear() === y
-    })
-    if (!rel.length) return null
-    return Math.round(rel.reduce((s, a) => s + (a.totalScore / a.maxScore) * 100, 0) / rel.length)
-  })
-
-  const valid = data.filter((d) => d !== null) as number[]
-  const max = valid.length ? Math.max(...valid) : 100
-  const min = valid.length ? Math.min(...valid) : 0
-  const range = max - min || 1
-  const W = 200, H = 60, pad = 10
-
-  const pts = data.map((v, i) => ({
-    x: pad + (i / (months.length - 1)) * (W - pad * 2),
-    y: v === null ? null : H - pad - ((v - min) / range) * (H - pad * 2),
-    v,
-  }))
-
-  const pathD = pts
-    .filter((p) => p.y !== null)
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
-    .join(" ")
-
-  return (
-    <div className="sd-chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="sd-chart-svg">
-        {pathD ? (
-          <>
-            <path d={pathD} fill="none" stroke="#f5a623" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            {pts.filter((p) => p.y !== null).map((p, i) => (
-              <circle key={i} cx={p.x} cy={p.y!} r="3" fill="#f5a623" />
-            ))}
-          </>
-        ) : (
-          <text x={W / 2} y={H / 2 + 4} textAnchor="middle" fontSize="9" fill="#ccc">
-            Belum ada data
-          </text>
-        )}
-      </svg>
-      <div className="sd-chart-months">
-        {months.map((m) => <span key={m}>{m}</span>)}
-      </div>
-    </div>
-  )
-}
-
-// ─── Student Dashboard ────────────────────────────────────────────────────────
 export default function StudentDashboard() {
-  const { user, logout, isLoading } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
-  const [quizzes, setQuizzes] = useState<QuizDB[]>([])
-  const [attempts, setAttempts] = useState<QuizAttempt[]>([])
-  const [tutors, setTutors] = useState<{ label: string; bg: string }[]>([])
+  const [quizzes, setQuizzes] = useState<QuizFromDB[]>([])
+  const [attempts, setAttempts] = useState<AttemptFromDB[]>([])
+  const [fetching, setFetching] = useState(true)
 
-  // ── Auth guard → redirect to login if not a student ──
   useEffect(() => {
-    if (!user) return;
+    if (!isLoading && (!user || user.role !== "student")) router.replace("/login")
+  }, [user, isLoading, router])
 
-    async function loadStudentData() {
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+
+    // Capture user.id sebagai local const supaya TypeScript yakin non-null di dalam closure
+    const userId = user.id
+
+    async function loadData() {
+      setFetching(true)
       try {
-        const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        
-        // Mengambil jenjang dari user (e.g. "SD", "SMP", "SMA")
-        const schoolLevel = user?.school_level || "SD"; 
-        
-        const res = await fetch(`${BACKEND_URL}/api/exams/student/available?level=${schoolLevel}`);
-        const data = await res.json();
+        const [quizzesRes, attemptsRes] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/exams/student/${userId}/available`),
+          fetch(`${BACKEND_URL}/api/exams/student/${userId}/attempts`)
+        ])
+        const quizzesJson = await quizzesRes.json()
+        const attemptsJson = await attemptsRes.json()
 
-        if (res.ok && data.data) {
-          const fetchedQuizzes = data.data;
-          setQuizzes(fetchedQuizzes);
+        if (cancelled) return
 
-          // Ekstraksi Tutor otomatis dari kuis yang tersedia
-          const uniqueTeachers = new Map();
-          const colors = ["#f5a623", "#e67e22", "#27ae60", "#2980b9", "#8e44ad"];
-          
-          fetchedQuizzes.forEach((q: QuizDB) => {
-            if (q.teacher && !uniqueTeachers.has(q.teacher.name)) {
-              uniqueTeachers.set(q.teacher.name, {
-                label: q.teacher.name,
-                bg: colors[uniqueTeachers.size % colors.length]
-              });
-            }
-          });
-          setTutors(Array.from(uniqueTeachers.values()));
-        }
-      } catch (error) {
-        console.error("Gagal memuat kuis murid:", error);
+        if (quizzesRes.ok) setQuizzes(quizzesJson.data || [])
+        if (attemptsRes.ok) setAttempts(attemptsJson.data || [])
+      } catch (err) {
+        console.error("Gagal memuat dashboard:", err)
+      } finally {
+        if (!cancelled) setFetching(false)
       }
     }
 
-    loadStudentData();
-    setAttempts(getStoredAttempts()); // Sementara attempts tetap mock sampai table pengerjaan siap
-  }, [user]);
+    loadData()
+    return () => { cancelled = true }
+  }, [user])
 
-  if (isLoading || !user) return null;
+  // ─── EARLY RETURN: TS sekarang yakin user non-null di bawah sini ───
+  if (isLoading || !user) {
+    return (
+      <div className="flex min-h-screen bg-background">
+        <Sidebar />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </main>
+      </div>
+    )
+  }
 
-  // ── Derived state ──
-  const myAttempts   = attempts.filter((a) => a.studentId === user.id)
-  const completedIds = new Set(myAttempts.map((a) => Number(a.quizId)))
-  const pending      = quizzes.filter((q) => !completedIds.has(q.quiz_id))
-  const avgScore     = myAttempts.length
-    ? Math.round(myAttempts.reduce((s, a) => s + (a.totalScore / a.maxScore) * 100, 0) / myAttempts.length)
+  const pendingQuizzes = quizzes.filter(q => !q.is_completed).slice(0, 4)
+  const recentAttempts = attempts.slice(0, 3)
+
+  const totalCompleted = attempts.length
+  const avgScore = attempts.length
+    ? Math.round(attempts.reduce((s, a) => s + a.total_score, 0) / attempts.length)
     : 0
-    
-  const progress = quizzes.length
-    ? Math.min(100, Math.round((myAttempts.length / quizzes.length) * 100))
+  const bestScore = attempts.length
+    ? Math.max(...attempts.map(a => Math.round(a.total_score)))
     : 0
 
   return (
-    <div className="sd-page">
+    <div className="flex min-h-screen bg-background">
+      <Sidebar />
+      <main className="flex-1 lg:p-8 p-4 pt-16 lg:pt-8 overflow-y-auto">
 
-      {/* ── Background ── */}
-      <div className="sd-bg">
-        <Image src="/background.png" alt="" fill priority className="sd-bg-img" />
-      </div>
-
-      {/* ── Navbar ── */}
-      <nav className="sd-nav">
-        <Image src="/logo kejarcita.png" alt="Kejarcita" width={150} height={44} className="sd-logo" priority />
-        <div className="sd-search-box">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#aaa" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          <input type="text" placeholder="Cari..." className="sd-search-input" />
-        </div>
-        <div className="sd-nav-actions">
-          <div className="sd-avatar">{user.name.charAt(0).toUpperCase()}</div>
-          <button onClick={logout} className="sd-logout-btn">Keluar</button>
-        </div>
-      </nav>
-
-      {/* ── Kid illustrations ── */}
-      <div className="sd-kid sd-kid--left">
-        <Image src="/kidz 1.png" alt="" fill className="sd-kid-img" />
-      </div>
-      <div className="sd-kid sd-kid--right">
-        <Image src="/kidz 2.png" alt="" fill className="sd-kid-img" />
-      </div>
-
-      {/* ── Main content ── */}
-      <main className="sd-main">
-
-        {/* Welcome card */}
-        <div className="sd-welcome fade-in">
-          <h1 className="sd-welcome-title">
-            Selamat Datang Kembali,{" "}
-            <span className="sd-welcome-name">({user.name.split(" ")[0]})</span>!
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground mb-1">
+            Halo, {user.name.split(" ")[0]}! 👋
           </h1>
-          <p className="sd-welcome-sub">Siap untuk sesi belajar hari ini?</p>
-          <div className="sd-progress-track">
-            <div className="sd-progress-fill" style={{ width: `${progress}%` }} />
-          </div>
+          <p className="text-muted-foreground">
+            {user.grade_name
+              ? `${user.grade_name}${user.school_level ? ` · ${user.school_level}` : ""}`
+              : "Selamat datang di dashboard belajarmu."}
+          </p>
         </div>
 
-        {/* 4-card grid */}
-        <div className="sd-grid fade-in">
-
-          {/* Pelatihan Saya */}
-          <div className="sd-card">
-            <h2 className="sd-card-title">Pelatihan Saya</h2>
-            <div className="sd-course-row">
-              <div className="sd-course-icon-wrap">
-                <svg viewBox="0 0 24 24" width="26" height="26" fill="#f5a623">
-                  <path d="M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-                </svg>
-              </div>
-              <div>
-                <p className="sd-course-name">Kourse Saya</p>
-                <p className="sd-course-meta">{myAttempts.length} Summary</p>
-              </div>
-            </div>
-            {pending.slice(0, 2).map((q) => (
-              <Link key={q.quiz_id} href={`/student/quiz/${q.quiz_id}`} className="sd-pending-item">
-                <span className="sd-pending-dot" />
-                <span className="sd-pending-label">
-                  {q.title} <span style={{ fontSize: '11px', color: '#aaa' }}>({q.grade?.grade_name})</span>
-                </span>
-                <span className="sd-pending-arrow">›</span>
-              </Link>
-            ))}
+        {fetching ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
-
-          {/* Daftar Tutor */}
-          <div className="sd-card">
-            <h2 className="sd-card-title">Daftar Tutor</h2>
-            <div className="sd-tutor-row">
-              {tutors.map((t) => (
-                <div key={t.label} className="sd-tutor">
-                  <div className="sd-tutor-avatar" style={{ background: t.bg }}>
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="white">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M20 21a8 8 0 10-16 0" />
-                    </svg>
-                  </div>
-                  <span className="sd-tutor-name">{t.label}</span>
+        ) : (
+          <>
+            {/* Stat cards */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-white rounded-2xl border border-border p-4">
+                <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
+                  <Trophy className="w-5 h-5 text-primary" />
                 </div>
-              ))}
+                <p className="text-2xl font-bold text-foreground">{totalCompleted}</p>
+                <p className="text-xs text-muted-foreground">Kuis Selesai</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-border p-4">
+                <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center mb-3">
+                  <TrendingUp className="w-5 h-5 text-amber-600" />
+                </div>
+                <p className="text-2xl font-bold text-foreground">{avgScore}</p>
+                <p className="text-xs text-muted-foreground">Rata-rata Nilai</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-border p-4">
+                <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center mb-3">
+                  <Award className="w-5 h-5 text-green-600" />
+                </div>
+                <p className="text-2xl font-bold text-foreground">{bestScore}</p>
+                <p className="text-xs text-muted-foreground">Nilai Tertinggi</p>
+              </div>
             </div>
-          </div>
 
-          {/* Arsip Nilai */}
-          <div className="sd-card">
-            <div className="sd-card-header">
-              <h2 className="sd-card-title">Arsip Nilai</h2>
-              {avgScore > 0 && <span className="sd-badge">Avg {avgScore}</span>}
-            </div>
-            <SparklineChart attempts={myAttempts} />
-          </div>
+            {/* Pending quizzes */}
+            <section className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Target className="w-5 h-5 text-primary" />
+                  Tugas yang Belum Selesai
+                </h2>
+                <Link href="/student/assignments" className="text-sm text-primary hover:underline flex items-center gap-1">
+                  Lihat semua <ChevronRight className="w-4 h-4" />
+                </Link>
+              </div>
 
-          {/* Favorit */}
-          <div className="sd-card">
-            <h2 className="sd-card-title">Favorit</h2>
-            <div className="sd-favorit">
-              <svg viewBox="0 0 24 24" width="44" height="44" fill="#f5a623">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
-              <p className="sd-favorit-text">Pilih soal yang kamu sukai</p>
-            </div>
-            {myAttempts.length > 0 && (
-              <Link href="/student/results" className="sd-favorit-link">
-                Lihat hasil terakhir →
-              </Link>
+              {pendingQuizzes.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-border p-8 text-center">
+                  <CheckCircle2 className="w-10 h-10 text-green-500 mx-auto mb-3" />
+                  <p className="font-semibold text-foreground mb-1">Semua kuis sudah selesai! 🎉</p>
+                  <p className="text-sm text-muted-foreground">
+                    Belum ada tugas baru untuk saat ini.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {pendingQuizzes.map((quiz) => (
+                    <Link
+                      key={quiz.quiz_id}
+                      href={`/student/quiz/${quiz.quiz_id}`}
+                      className="bg-white rounded-2xl border border-border p-4 hover:border-primary/40 hover:shadow-sm transition-all"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <BookOpen className="w-5 h-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-xs font-semibold text-primary">
+                              {quiz.subject?.subject_name || "Mapel"}
+                            </p>
+                            {quiz.grade?.grade_name && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                                {quiz.grade.grade_name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="font-bold text-foreground line-clamp-1 mb-1">{quiz.title}</p>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> {quiz.time_limit} mnt
+                            </span>
+                            <span>{quiz._count?.questions || 0} soal</span>
+                          </div>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* Recent attempts */}
+            {recentAttempts.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-primary" />
+                    Nilai Terbaru
+                  </h2>
+                  <Link href="/student/results" className="text-sm text-primary hover:underline flex items-center gap-1">
+                    Lihat semua <ChevronRight className="w-4 h-4" />
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {recentAttempts.map((a) => {
+                    const pct = Math.round(a.total_score)
+                    const scoreClass = pct >= 80 ? "text-green-700 bg-green-50"
+                      : pct >= 60 ? "text-yellow-700 bg-yellow-50"
+                      : "text-red-700 bg-red-50"
+                    return (
+                      <Link
+                        key={a.attempt_token}
+                        href={`/student/results/${a.attempt_token}`}
+                        className="block bg-white rounded-2xl border border-border p-4 hover:border-primary/40 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-foreground truncate">{a.quiz_title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {a.subject_name} · {new Date(a.completed_at).toLocaleDateString("id-ID", {
+                                day: "numeric", month: "short"
+                              })}
+                            </p>
+                          </div>
+                          <div className={`text-center px-3 py-1.5 rounded-xl ${scoreClass} flex-shrink-0`}>
+                            <p className="text-xl font-bold leading-none">{pct}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </section>
             )}
-          </div>
-
-        </div>
-
-        {/* Bottom arrow */}
-        <div className="sd-bottom">
-          <button className="sd-arrow-btn">→</button>
-        </div>
-
+          </>
+        )}
       </main>
     </div>
   )
