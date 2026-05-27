@@ -59,9 +59,36 @@ export default function TeacherQuizzes() {
     fetchTeacherQuizzes();
   }, [user]);
 
-  // Fungsi Hapus (Hanya Mockup Sementara, karena kita belum buat API Delete-nya)
-  function deleteQuiz(quizId: number) {
-    alert(`Fitur hapus untuk Kuis ID ${quizId} akan segera dihubungkan ke database!`);
+  // Hapus kuis langsung ke backend berdasarkan quiz_id
+  async function deleteQuiz(quizId: number) {
+    const confirmed = window.confirm("Yakin ingin menghapus kuis ini? Tindakan ini tidak bisa dibatalkan.");
+    if (!confirmed) return;
+
+    try {
+      const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const token = localStorage.getItem("token");
+
+      const response = await fetch(`${BACKEND_URL}/api/exams/${quizId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.message || "Gagal menghapus kuis.");
+        return;
+      }
+
+      setQuizzes((prev) => prev.filter((quiz) => quiz.quiz_id !== quizId));
+      alert(result.message || "Kuis berhasil dihapus.");
+    } catch (error) {
+      console.error("Error saat menghapus kuis:", error);
+      alert("Terjadi kesalahan saat menghapus kuis.");
+    }
   }
 
   if (isLoading || !user) return null
