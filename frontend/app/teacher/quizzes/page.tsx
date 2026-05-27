@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
-import { PlusSquare, FileText, Clock, Users, Trash2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { PlusSquare, FileText, Clock, Users, Trash2, Pencil } from "lucide-react"
 
 // 1. Buat tipe data (Interface) yang cocok dengan struktur Prisma Database
 interface QuizDB {
@@ -22,6 +23,7 @@ interface QuizDB {
 export default function TeacherQuizzes() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  const { toast } = useToast()
   
   // Gunakan state tipe baru
   const [quizzes, setQuizzes] = useState<QuizDB[]>([])
@@ -79,15 +81,26 @@ export default function TeacherQuizzes() {
       const result = await response.json();
 
       if (!response.ok) {
-        alert(result.message || "Gagal menghapus kuis.");
+        toast({
+          title: "Gagal menghapus kuis",
+          description: result.message || "Terjadi kesalahan saat menghapus kuis.",
+          variant: "destructive"
+        })
         return;
       }
 
       setQuizzes((prev) => prev.filter((quiz) => quiz.quiz_id !== quizId));
-      alert(result.message || "Kuis berhasil dihapus.");
+      toast({
+        title: "Kuis berhasil dihapus",
+        description: result.message || "Data kuis telah dihapus dari sistem."
+      })
     } catch (error) {
       console.error("Error saat menghapus kuis:", error);
-      alert("Terjadi kesalahan saat menghapus kuis.");
+      toast({
+        title: "Gagal menghapus kuis",
+        description: "Terjadi kesalahan saat menghapus kuis.",
+        variant: "destructive"
+      })
     }
   }
 
@@ -149,7 +162,13 @@ export default function TeacherQuizzes() {
                     Tenggat: {new Date(quiz.due_date).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
                   </div>
 
-                  <div className="flex justify-end pt-1 border-t border-border mt-2">
+                  <div className="flex justify-end gap-3 pt-1 border-t border-border mt-2">
+                    <Link
+                      href={`/teacher/edit-quiz/${quiz.quiz_id}`}
+                      className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </Link>
                     <button
                       onClick={() => deleteQuiz(quiz.quiz_id)}
                       className="flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"

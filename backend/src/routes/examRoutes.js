@@ -12,7 +12,9 @@ const {
   getAttemptResult,
   getStudentAttempts,
   getTeacherAttempts,
-  deleteQuizById
+  deleteQuizById,
+  getTeacherQuizDetail,
+  updateQuizById
 } = require('../controllers/examController');
 
 // ==========================================
@@ -22,6 +24,8 @@ router.post('/', createQuizWithQuestions);
 router.post('/question', addQuestionWithKey);
 router.get('/teacher/:teacher_id', getTeacherQuizzes);
 router.get('/teacher/:teacher_id/attempts', getTeacherAttempts); // BARU: list semua attempt siswa di quiz miliknya
+router.get('/:quiz_id/edit', authenticateToken, isTeacher, getTeacherQuizDetail);
+router.put('/:quiz_id', authenticateToken, isTeacher, updateQuizById);
 router.delete('/:quiz_id', authenticateToken, isTeacher, deleteQuizById);
 
 // ==========================================
