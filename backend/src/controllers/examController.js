@@ -168,14 +168,14 @@ const getAvailableQuizzes = async (req, res) => {
   try {
     const { student_id } = req.params;
     const studentId = parseInt(student_id);
-
+ 
     if (!studentId) return res.status(400).json({ message: "ID siswa tidak valid." });
-
+ 
     const studentDetail = await prisma.userDetail.findUnique({
       where: { user_id: studentId },
       include: { grade: true }
     });
-
+ 
     if (!studentDetail) return res.status(404).json({ message: "Data siswa tidak ditemukan." });
     if (!studentDetail.grade_id || !studentDetail.grade) {
       return res.status(200).json({
@@ -183,18 +183,23 @@ const getAvailableQuizzes = async (req, res) => {
         message: "Siswa belum punya kelas. Lengkapi profil dulu."
       });
     }
-
+ 
     const schoolLevel = studentDetail.grade.school_level;
     const gradesInSameLevel = await prisma.grade.findMany({
       where: { school_level: schoolLevel },
       select: { grade_id: true }
     });
     const gradeIds = gradesInSameLevel.map(g => g.grade_id);
-
+ 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // PERUBAHAN UTAMA: hapus filter `due_date: { gte: new Date() }`
+    // Sekarang semua quiz untuk grade siswa dibalikkan, termasuk yang
+    // sudah lewat. Frontend yang akan kategorikan ke tab masing-masing.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     const quizzes = await prisma.quiz.findMany({
       where: {
-        grade_id: { in: gradeIds },
-        due_date: { gte: new Date() }
+        grade_id: { in: gradeIds }
+        // due_date filter dihapus
       },
       include: {
         teacher: { select: { name: true } },
@@ -204,7 +209,7 @@ const getAvailableQuizzes = async (req, res) => {
       },
       orderBy: { created_at: 'desc' }
     });
-
+ 
     const quizIds = quizzes.map(q => q.quiz_id);
     const completedQuizIds = new Set();
     if (quizIds.length > 0) {
@@ -217,11 +222,12 @@ const getAvailableQuizzes = async (req, res) => {
       });
       for (const a of answers) completedQuizIds.add(a.question.quiz_id);
     }
-
+ 
     const enriched = quizzes.map(q => ({
-      ...q, is_completed: completedQuizIds.has(q.quiz_id)
+      ...q,
+      is_completed: completedQuizIds.has(q.quiz_id)
     }));
-
+ 
     res.status(200).json({
       status: "success",
       data: enriched,
@@ -236,6 +242,9 @@ const getAvailableQuizzes = async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil kuis", error: error.message });
   }
 };
+ 
+module.exports = { getAvailableQuizzes };
+ 
 
 // ==========================================
 // 5. MURID MEMBUKA KUIS

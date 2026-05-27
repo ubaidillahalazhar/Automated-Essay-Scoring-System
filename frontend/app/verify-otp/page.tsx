@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
-import Cookies from "js-cookie";
 import "@/styles/otp.css"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -27,7 +26,6 @@ export default function VerifyOtpPage() {
     setIsLoading(true)
 
     try {
-      // Menembak ke endpoint verifikasi OTP di backend Anda
       const response = await fetch(`${BACKEND_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,12 +40,8 @@ export default function VerifyOtpPage() {
         return
       }
 
-      if (response.ok) {
-
-  alert("Verifikasi Sukses! Akun Anda telah aktif. silakan login dengan email dan password yang sudah didaftarkan.");
- 
-  router.push("/login");
-}
+      alert("Verifikasi Sukses! Akun Anda telah aktif. Silakan login.");
+      router.push("/login");
     } catch (err) {
       setError("Gagal terhubung ke server.")
       setIsLoading(false)
@@ -64,25 +58,21 @@ export default function VerifyOtpPage() {
           <h2 className="otp-title">Verifikasi Kode OTP</h2>
           <p className="otp-subtitle">Masukkan kode 6 digit yang dikirimkan ke email Anda.</p>
 
-        <div className="otp-email-box">
-          {email ? (
-            <>
-              Kode OTP dikirim ke <strong>{email}</strong>
-            </>
-          ) : (
-            <>
-              Email belum ditemukan. Kembali ke pendaftaran dan buka halaman verifikasi dari sana.
-            </>
-          )}
-        </div>
+          <div className="otp-email-box">
+            {email ? (
+              <>Kode OTP dikirim ke <strong>{email}</strong></>
+            ) : (
+              <>Email belum ditemukan. Kembali ke pendaftaran dan buka halaman verifikasi dari sana.</>
+            )}
+          </div>
 
           <div className="otp-field-block">
-          <label className="otp-field-label">Kode OTP</label>
-          <input 
-            type="text" required maxLength={6}
-            value={otp} onChange={(e) => setOtp(e.target.value)}
-            className="otp-field-input"
-          />
+            <label className="otp-field-label">Kode OTP</label>
+            <input
+              type="text" required maxLength={6}
+              value={otp} onChange={(e) => setOtp(e.target.value)}
+              className="otp-field-input"
+            />
           </div>
 
           {error && <div className="otp-error">{error}</div>}

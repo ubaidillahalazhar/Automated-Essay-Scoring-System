@@ -13,8 +13,9 @@ interface AuthContextType {
     password: string,
     role: "student" | "teacher",
     extra?: string,
-    grade_id?: number    // ← BARU: untuk siswa
+    grade_id?: number
   ) => Promise<{ success: boolean; message: string }>
+  updateProfile: (grade_id: number) => Promise<{ success: boolean; message: string }>   // ← BARU
   logout: () => void
   isLoading: boolean
 }
@@ -43,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, message: data.message || "Login gagal. Periksa email dan kata sandi." };
+        return { success: false, message: data.message || "Login gagal." };
       }
 
       if (data.token) {
@@ -67,19 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
     role: "student" | "teacher",
     extra?: string,
-    grade_id?: number    // ← BARU
+    grade_id?: number
   ): Promise<{ success: boolean; message: string }> {
     try {
+      const body: any = {
+        name, email, password, role,
+      };
+      // KIRIM grade_id LANGSUNG ke backend (sudah ada di skema PendingUser setelah migration)
+      if (role === "student" && grade_id) {
+        body.grade_id = grade_id;
+      }
+
       const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-          role,
-          school: role === "student" ? extra : undefined,
-        })
+        body: JSON.stringify(body)
       });
 
       const data = await response.json();
@@ -88,28 +91,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.message || "Gagal mendaftar." };
       }
 
-      // Simpan grade_id sementara di localStorage supaya halaman verify-otp
-      // bisa kirim ulang ke backend (PendingUser tidak menyimpan grade_id).
-      if (role === "student" && grade_id) {
-        localStorage.setItem("pending_grade_id", String(grade_id));
-        localStorage.setItem("pending_email", email);
-      }
-
       return { success: true, message: "Akun berhasil dibuat!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
 
+  /**
+   * Update profil (untuk siswa yang grade_id-nya null karena bug lama).
+   * Setelah update, user state di-refresh otomatis.
+   */
+  async function updateProfile(grade_id: number): Promise<{ success: boolean; message: string }> {
+    if (!user) return { success: false, message: "Belum login." };
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/profile/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grade_id })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, message: data.message || "Gagal memperbarui profil." };
+      }
+
+      // Update user state
+      setUser(data.user);
+      setStoredUser(data.user);
+
+      return { success: true, message: "Profil berhasil diperbarui!" };
+    } catch (error) {
+      return { success: false, message: "Terjadi kesalahan pada server backend." };
+    }
+  }
+
   function logout() {
-    setUser(null)
-    setStoredUser(null)
-    localStorage.removeItem("token")
-    Cookies.remove("token")
+    setUser(null);
+    setStoredUser(null);
+    localStorage.removeItem("token");
+    Cookies.remove("token");
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, signup, updateProfile, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   )

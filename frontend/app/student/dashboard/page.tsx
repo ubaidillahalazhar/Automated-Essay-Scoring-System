@@ -9,6 +9,7 @@ import {
   BookOpen, Trophy, Clock, TrendingUp, Sparkles, Loader2,
   CheckCircle2, ChevronRight, Target, Award
 } from "lucide-react"
+import { CompleteProfileModal } from "@/components/shared/CompleteProfileModal"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -105,7 +106,7 @@ export default function StudentDashboard() {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 lg:p-8 p-4 pt-16 lg:pt-8 overflow-y-auto">
-
+        <CompleteProfileModal />
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-1">
