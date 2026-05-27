@@ -30,7 +30,7 @@ const authenticateToken = (req, res, next) => {
 
 // Opsional: Satpam khusus untuk mengecek apakah dia Guru (role_id: 1)
 const isTeacher = (req, res, next) => {
-  if (req.user && req.user.roleId === 1) {
+  if (req.user && req.user.roleId === 2) {
     next();
   } else {
     return res.status(403).json({ message: "Akses ditolak! Hanya Guru yang boleh melakukan aksi ini." });
