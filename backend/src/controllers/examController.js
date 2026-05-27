@@ -699,6 +699,87 @@ const getTeacherAttempts = async (req, res) => {
   }
 };
 
+// ==========================================
+// 10. HAPUS KUIS BERDASARKAN ID (khusus pemilik kuis)
+// Endpoint: DELETE /api/exams/:quiz_id
+// ==========================================
+const deleteQuizById = async (req, res) => {
+  try {
+    const { quiz_id } = req.params;
+    const quizId = parseInt(quiz_id);
+
+    if (!quizId) {
+      return res.status(400).json({ message: "ID kuis tidak valid." });
+    }
+
+    const teacherId = req.user?.userId;
+    if (!teacherId) {
+      return res.status(401).json({ message: "Token tidak valid." });
+    }
+
+    const quiz = await prisma.quiz.findUnique({
+      where: { quiz_id: quizId },
+      select: { quiz_id: true, created_by: true }
+    });
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Kuis tidak ditemukan." });
+    }
+
+    if (quiz.created_by !== teacherId) {
+      return res.status(403).json({ message: "Anda tidak berhak menghapus kuis ini." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const questions = await tx.essayQuestion.findMany({
+        where: { quiz_id: quizId },
+        select: { question_id: true }
+      });
+
+      const questionIds = questions.map((q) => q.question_id);
+
+      if (questionIds.length > 0) {
+        const answers = await tx.studentAnswer.findMany({
+          where: { question_id: { in: questionIds } },
+          select: { answer_id: true }
+        });
+
+        const answerIds = answers.map((a) => a.answer_id);
+
+        if (answerIds.length > 0) {
+          await tx.score.deleteMany({
+            where: { answer_id: { in: answerIds } }
+          });
+        }
+
+        await tx.studentAnswer.deleteMany({
+          where: { question_id: { in: questionIds } }
+        });
+
+        await tx.answerKey.deleteMany({
+          where: { question_id: { in: questionIds } }
+        });
+
+        await tx.essayQuestion.deleteMany({
+          where: { quiz_id: quizId }
+        });
+      }
+
+      await tx.quiz.delete({
+        where: { quiz_id: quizId }
+      });
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "Kuis berhasil dihapus."
+    });
+  } catch (error) {
+    console.error("❌ Error deleteQuizById:", error);
+    return res.status(500).json({ message: "Gagal menghapus kuis", error: error.message });
+  }
+};
+
 module.exports = {
   createQuizWithQuestions,
   addQuestionWithKey,
@@ -708,5 +789,6 @@ module.exports = {
   submitAnswers,
   getAttemptResult,
   getStudentAttempts,
-  getTeacherAttempts
+  getTeacherAttempts,
+  deleteQuizById
 };

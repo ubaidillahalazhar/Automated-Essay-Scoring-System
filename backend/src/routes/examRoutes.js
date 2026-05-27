@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken, isTeacher } = require('../middleware/authMiddleware');
 
 const {
   createQuizWithQuestions,
@@ -10,7 +11,8 @@ const {
   submitAnswers,
   getAttemptResult,
   getStudentAttempts,
-  getTeacherAttempts
+  getTeacherAttempts,
+  deleteQuizById
 } = require('../controllers/examController');
 
 // ==========================================
@@ -20,6 +22,7 @@ router.post('/', createQuizWithQuestions);
 router.post('/question', addQuestionWithKey);
 router.get('/teacher/:teacher_id', getTeacherQuizzes);
 router.get('/teacher/:teacher_id/attempts', getTeacherAttempts); // BARU: list semua attempt siswa di quiz miliknya
+router.delete('/:quiz_id', authenticateToken, isTeacher, deleteQuizById);
 
 // ==========================================
 // RUTE UNTUK MURID
