@@ -375,27 +375,27 @@ export default function SignupPage() {
 
               <div className="signup-summary">
                 <div className="signup-summary-row">
-                  <span className="signup-summary-key">Email</span>
+                  <span className="signup-summary-key">Email: </span>
                   <span className="signup-summary-val">{email}</span>
                 </div>
                 <div className="signup-summary-row">
-                  <span className="signup-summary-key">Username</span>
+                  <span className="signup-summary-key">Username: </span>
                   <span className="signup-summary-val">{username}</span>
                 </div>
                 <div className="signup-summary-row">
-                  <span className="signup-summary-key">Peran</span>
+                  <span className="signup-summary-key">Peran: </span>
                   <span className="signup-summary-val">{role === "student" ? "Siswa" : "Guru"}</span>
                 </div>
                 {role === "student" && gradeId && (
                   <div className="signup-summary-row">
-                    <span className="signup-summary-key">Kelas</span>
+                    <span className="signup-summary-key">Kelas: </span>
                     <span className="signup-summary-val">
                       {grades.find(g => g.grade_id === gradeId)?.grade_name} ({schoolLevel})
                     </span>
                   </div>
                 )}
                 <div className="signup-summary-row">
-                  <span className="signup-summary-key">Tanggal lahir</span>
+                  <span className="signup-summary-key">Tanggal lahir: </span>
                   <span className="signup-summary-val">{birthDay} {birthMonth} {birthYear}</span>
                 </div>
               </div>
