@@ -17,7 +17,6 @@ interface Grade {
   school_level: string
 }
 
-// ─── Eye Icons ────────────────────────────────────────────────────────────────
 function EyeIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
@@ -57,7 +56,6 @@ export default function SignupPage() {
   const [error, setError]                     = useState("")
   const [isLoading, setIsLoading]             = useState(false)
 
-  // Daftar grade dari backend
   const [grades, setGrades] = useState<Grade[]>([])
   const [loadingGrades, setLoadingGrades] = useState(false)
 
@@ -66,7 +64,6 @@ export default function SignupPage() {
     "Juli","Agustus","September","Oktober","November","Desember",
   ]
 
-  // Fetch daftar grade saat masuk step 3 (atau saat role berubah jadi student)
   useEffect(() => {
     if (role !== "student" || grades.length > 0) return
 
@@ -87,7 +84,6 @@ export default function SignupPage() {
     return () => { cancelled = true }
   }, [role, grades.length])
 
-  // Saat school_level berubah, reset grade_id (kecuali masih kompatibel)
   useEffect(() => {
     if (gradeId) {
       const current = grades.find(g => g.grade_id === gradeId)
@@ -137,6 +133,7 @@ export default function SignupPage() {
     setIsLoading(true)
     await new Promise((r) => setTimeout(r, 500))
 
+    // grade_id dikirim langsung ke backend; tidak perlu localStorage lagi
     const result = await signup(
       username,
       email,
@@ -177,7 +174,6 @@ export default function SignupPage() {
 
         <div className="signup-card fade-in" key={step}>
 
-          {/* STEP 1: Email */}
           {step === 1 && (
             <form onSubmit={handleStep1} className="signup-form">
               <h1 className="signup-title">Kami senang menyambutmu!</h1>
@@ -214,7 +210,6 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* STEP 2: Username + Password */}
           {step === 2 && (
             <form onSubmit={handleStep2} className="signup-form">
               <div className="signup-field">
@@ -257,7 +252,6 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* STEP 3: Role + Class selection */}
           {step === 3 && (
             <form onSubmit={handleStep3} className="signup-form">
               <h2 className="signup-title signup-title--center">Saya adalah...</h2>
@@ -279,7 +273,6 @@ export default function SignupPage() {
                 ))}
               </div>
 
-              {/* Untuk SISWA: pilih jenjang + kelas */}
               {role === "student" && (
                 <>
                   <div className="signup-field" style={{ marginTop: 16 }}>
@@ -291,9 +284,7 @@ export default function SignupPage() {
                           onClick={() => setSchoolLevel(lvl)}
                           className="signup-input"
                           style={{
-                            cursor: 'pointer',
-                            flex: 1,
-                            textAlign: 'center',
+                            cursor: 'pointer', flex: 1, textAlign: 'center',
                             fontWeight: schoolLevel === lvl ? 700 : 400,
                             background: schoolLevel === lvl ? '#fef3e2' : '#fff',
                             borderColor: schoolLevel === lvl ? '#f5a623' : '#e5e7eb',
@@ -343,7 +334,6 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* STEP 4: Birthday */}
           {step === 4 && (
             <form onSubmit={handleStep4} className="signup-form">
               <h2 className="signup-title signup-title--center">Berapa usia kamu?</h2>
@@ -376,7 +366,6 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* STEP 5: Confirm */}
           {step === 5 && (
             <form onSubmit={handleStep5} className="signup-form">
               <h2 className="signup-title signup-title--center">Siap untuk memulai?</h2>
