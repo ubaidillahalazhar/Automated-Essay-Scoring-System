@@ -4,6 +4,11 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import Cookies from "js-cookie";
 import { type User, getStoredUser, setStoredUser } from "./store"
 
+interface UpdateProfilePayload {
+  name?: string
+  grade_id?: number
+}
+
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>
@@ -15,7 +20,9 @@ interface AuthContextType {
     extra?: string,
     grade_id?: number
   ) => Promise<{ success: boolean; message: string }>
-  updateProfile: (grade_id: number) => Promise<{ success: boolean; message: string }>   // ← BARU
+  updateProfile: (payload: UpdateProfilePayload) => Promise<{ success: boolean; message: string }>
+  changePassword: (oldPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>
+  refreshProfile: () => Promise<void>
   logout: () => void
   isLoading: boolean
 }
@@ -71,10 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     grade_id?: number
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const body: any = {
-        name, email, password, role,
-      };
-      // KIRIM grade_id LANGSUNG ke backend (sudah ada di skema PendingUser setelah migration)
+      const body: any = { name, email, password, role };
       if (role === "student" && grade_id) {
         body.grade_id = grade_id;
       }
@@ -91,6 +95,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.message || "Gagal mendaftar." };
       }
 
+      if (role === "student" && grade_id) {
+        localStorage.setItem("pending_grade_id", String(grade_id));
+        localStorage.setItem("pending_email", email);
+      }
+
       return { success: true, message: "Akun berhasil dibuat!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
@@ -98,17 +107,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   /**
-   * Update profil (untuk siswa yang grade_id-nya null karena bug lama).
-   * Setelah update, user state di-refresh otomatis.
+   * Update profil. Bisa update name, grade_id, atau keduanya.
+   * Server hanya update field yang dikirim (PATCH-like).
    */
-  async function updateProfile(grade_id: number): Promise<{ success: boolean; message: string }> {
+  async function updateProfile(payload: UpdateProfilePayload): Promise<{ success: boolean; message: string }> {
     if (!user) return { success: false, message: "Belum login." };
 
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/profile/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ grade_id })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -117,13 +126,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, message: data.message || "Gagal memperbarui profil." };
       }
 
-      // Update user state
       setUser(data.user);
       setStoredUser(data.user);
 
-      return { success: true, message: "Profil berhasil diperbarui!" };
+      return { success: true, message: data.message || "Profil berhasil diperbarui!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
+    }
+  }
+
+  /**
+   * Ganti password. Backend akan verifikasi password lama dulu.
+   */
+  async function changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+    if (!user) return { success: false, message: "Belum login." };
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/password/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, message: data.message || "Gagal mengubah password." };
+      }
+
+      return { success: true, message: "Password berhasil diubah!" };
+    } catch (error) {
+      return { success: false, message: "Terjadi kesalahan pada server backend." };
+    }
+  }
+
+  /**
+   * Re-fetch user profile dari backend (mis. setelah update di tempat lain).
+   */
+  async function refreshProfile() {
+    if (!user) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/profile/${user.id}`);
+      const data = await response.json();
+      if (response.ok && data.user) {
+        setUser(data.user);
+        setStoredUser(data.user);
+      }
+    } catch (error) {
+      console.error("Gagal refresh profile:", error);
     }
   }
 
@@ -135,7 +185,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, updateProfile, logout, isLoading }}>
+    <AuthContext.Provider value={{
+      user, login, signup, updateProfile, changePassword,
+      refreshProfile, logout, isLoading
+    }}>
       {children}
     </AuthContext.Provider>
   )

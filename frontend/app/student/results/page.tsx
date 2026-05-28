@@ -12,6 +12,18 @@ import {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+const normalizeScore100 = (score: number) => {
+  if (!Number.isFinite(score)) return 0
+  if (score > 0 && score <= 10) return score * 10
+  return score
+}
+
+const normalizeAttemptTotal = (score: number) => {
+  if (!Number.isFinite(score)) return 0
+  if (score > 0 && score <= 10) return score * 10
+  return score
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Tipe data dari GET /api/exams/student/:id/attempts
 // ─────────────────────────────────────────────────────────────────────
@@ -86,10 +98,10 @@ export default function StudentResultsList() {
 
   // Statistik
   const avgScore = attempts.length
-    ? Math.round(attempts.reduce((s, a) => s + a.total_score, 0) / attempts.length)
+    ? Math.round(attempts.reduce((s, a) => s + normalizeAttemptTotal(a.total_score), 0) / attempts.length)
     : 0
   const bestScore = attempts.length
-    ? Math.max(...attempts.map(a => Math.round(a.total_score)))
+    ? Math.max(...attempts.map(a => Math.round(normalizeAttemptTotal(a.total_score))))
     : 0
 
   return (
@@ -157,7 +169,7 @@ export default function StudentResultsList() {
         ) : (
           <div className="space-y-3">
             {attempts.map((a) => {
-              const pct = Math.round(a.total_score)
+              const pct = Math.round(normalizeAttemptTotal(a.total_score))
               const scoreClass = pct >= 80
                 ? "text-green-700 bg-green-50 border-green-100"
                 : pct >= 60

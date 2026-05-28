@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import {
   BookOpen, LayoutDashboard, FileText, ClipboardList,
-  BarChart2, LogOut, Menu, X, PlusSquare, Users
+  BarChart2, LogOut, Menu, X, PlusSquare, Users,
+  User
 } from "lucide-react"
 import { useState } from "react"
 
@@ -26,7 +27,7 @@ const teacherNav: NavItem[] = [
   { label: "Buat Kuis", href: "/teacher/create-quiz", icon: <PlusSquare className="w-4 h-4" /> },
   { label: "Kuis Saya", href: "/teacher/quizzes", icon: <FileText className="w-4 h-4" /> },
   { label: "Nilai Siswa", href: "/teacher/scores", icon: <Users className="w-4 h-4" /> },
-  { label: "Analisis AI", href: "/teacher/analysis", icon: <BarChart2 className="w-4 h-4" /> },
+  // { label: "Analisis AI", href: "/teacher/analysis", icon: <BarChart2 className="w-4 h-4" /> },
 ]
 
 export function Sidebar() {
@@ -51,17 +52,26 @@ export function Sidebar() {
       </div>
 
       {/* User info */}
-      <div className="px-4 py-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold flex-shrink-0">
-            {user.avatar || user.name.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
-            <p className="text-xs text-muted-foreground capitalize">{user.role === "student" ? `Siswa • ${user.class}` : `Guru • ${user.subject}`}</p>
-          </div>
-        </div>
-      </div>
+      <Link
+  href="/profile"
+  className="block px-4 py-4 border-b border-border hover:bg-muted/40 transition-colors group"
+>
+  <div className="flex items-center gap-3">
+    <div className="w-9 h-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold flex-shrink-0">
+      {user.avatar || user.name.slice(0, 2).toUpperCase()}
+    </div>
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
+        {user.name}
+      </p>
+      <p className="text-xs text-muted-foreground capitalize">
+        {user.role === "student" ? "Siswa" : "Guru"}
+        {user.grade_name && ` · ${user.grade_name}`}
+      </p>
+    </div>
+    <User className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+  </div>
+</Link>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
