@@ -9,6 +9,12 @@ import { Search, ChevronRight, Clock, AlertCircle, Loader2, Users } from "lucide
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+const normalizeScore100 = (score: number) => {
+  if (!Number.isFinite(score)) return 0
+  if (score > 0 && score <= 10) return score * 10
+  return score
+}
+
 interface AttemptFromDB {
   attempt_token: string
   quiz_id: number
@@ -105,7 +111,7 @@ export default function TeacherScores() {
   const totalAttempts = filtered.length
   const uniqueStudents = new Set(filtered.map(a => a.student_id)).size
   const avgScore = totalAttempts
-    ? Math.round(filtered.reduce((s, a) => s + a.total_score, 0) / totalAttempts)
+    ? Math.round(filtered.reduce((s, a) => s + normalizeScore100(a.total_score), 0) / totalAttempts)
     : 0
   const passedCount = filtered.filter(a => a.total_score >= 70).length
 
@@ -189,7 +195,7 @@ export default function TeacherScores() {
         ) : (
           <div className="space-y-3">
             {filtered.map((attempt) => {
-              const pct = Math.round(attempt.total_score)
+              const pct = Math.round(normalizeScore100(attempt.total_score))
               const scoreClass = pct >= 80
                 ? "text-green-700 bg-green-50 border-green-100"
                 : pct >= 60

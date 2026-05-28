@@ -23,6 +23,49 @@ const decodeAttemptToken = (token) => {
   }
 };
 
+const normalizeAiScore = (aiResult) => {
+  const aiScore = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
+  const finalScore = Math.round(aiScore * 10 * 100) / 100;
+  return { aiScore, finalScore };
+};
+
+const normalizeStoredScore = (score) => {
+  const aiScoreRaw = Number(score?.ai_score);
+  const finalScoreRaw = Number(score?.final_score);
+
+  const normalizeFinalScore = (value) => {
+    if (!Number.isFinite(value)) return 0;
+    if (value > 0 && value <= 10) return Math.round(value * 10 * 100) / 100;
+    return Math.max(0, Math.min(100, value));
+  };
+
+  if (Number.isFinite(aiScoreRaw)) {
+    const aiScore = Math.max(0, Math.min(10, aiScoreRaw));
+    const expectedFinal = Math.round(aiScore * 10 * 100) / 100;
+
+    if (
+      Number.isFinite(finalScoreRaw) &&
+      Math.abs(finalScoreRaw - expectedFinal) <= 0.01
+    ) {
+      return {
+        aiScore,
+        finalScore: normalizeFinalScore(finalScoreRaw)
+      };
+    }
+
+    return { aiScore, finalScore: expectedFinal };
+  }
+
+  if (Number.isFinite(finalScoreRaw)) {
+    return {
+      aiScore: Math.max(0, Math.min(10, finalScoreRaw > 0 && finalScoreRaw <= 10 ? finalScoreRaw : finalScoreRaw / 10)),
+      finalScore: normalizeFinalScore(finalScoreRaw)
+    };
+  }
+
+  return { aiScore: 0, finalScore: 0 };
+};
+
 /**
  * Helper: Group StudentAnswers menjadi "attempt" virtual.
  * Asumsi: jawaban-jawaban yang submission_date-nya berdekatan (<2 detik antar jawaban)
@@ -331,11 +374,13 @@ const submitAnswers = async (req, res) => {
         const aiResult = await gradeEssayWithAI(
           q.question_text, q.answerKey.key_text, ans.answer_text
         );
+        const { aiScore, finalScore } = normalizeAiScore(aiResult);
+
         const savedScore = await prisma.score.create({
           data: {
             answer_id: ans.answer_id,
-            ai_score: aiResult.skor,
-            final_score: aiResult.nilai_100,
+            ai_score: aiScore,
+            final_score: finalScore,
             feedback: aiResult.alasan
           }
         });
@@ -464,8 +509,7 @@ const getAttemptResult = async (req, res) => {
     let totalScore = 0;
     const answersPayload = quiz.questions.map((q) => {
       const a = answerByQuestion.get(q.question_id);
-      const finalScore = a?.score?.final_score ? Number(a.score.final_score) : 0;
-      const aiScore = a?.score?.ai_score ? Number(a.score.ai_score) : 0;
+      const { finalScore, aiScore } = normalizeStoredScore(a?.score);
       const weight = q.weight ? Number(q.weight) : 1;
       totalScore += finalScore * (weight / totalWeight);
 
@@ -560,7 +604,7 @@ const getStudentAttempts = async (req, res) => {
       let totalScore = 0;
       for (const a of group) {
         const w = a.question.weight ? Number(a.question.weight) : 1;
-        const fs = a.score?.final_score ? Number(a.score.final_score) : 0;
+        const { finalScore: fs } = normalizeStoredScore(a.score);
         totalScore += fs * (w / totalWeight);
       }
 
@@ -666,7 +710,7 @@ const getTeacherAttempts = async (req, res) => {
       let totalScore = 0;
       for (const a of group) {
         const w = a.question.weight ? Number(a.question.weight) : 1;
-        const fs = a.score?.final_score ? Number(a.score.final_score) : 0;
+        const { finalScore: fs } = normalizeStoredScore(a.score);
         totalScore += fs * (w / totalWeight);
       }
 

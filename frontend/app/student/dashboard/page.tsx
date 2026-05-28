@@ -13,6 +13,12 @@ import { CompleteProfileModal } from "@/components/shared/CompleteProfileModal"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+const normalizeScore100 = (score: number) => {
+  if (!Number.isFinite(score)) return 0
+  if (score > 0 && score <= 10) return score * 10
+  return score
+}
+
 interface QuizFromDB {
   quiz_id: number
   title: string
@@ -96,10 +102,10 @@ export default function StudentDashboard() {
 
   const totalCompleted = attempts.length
   const avgScore = attempts.length
-    ? Math.round(attempts.reduce((s, a) => s + a.total_score, 0) / attempts.length)
+    ? Math.round(attempts.reduce((s, a) => s + normalizeScore100(a.total_score), 0) / attempts.length)
     : 0
   const bestScore = attempts.length
-    ? Math.max(...attempts.map(a => Math.round(a.total_score)))
+    ? Math.max(...attempts.map(a => Math.round(normalizeScore100(a.total_score))))
     : 0
 
   return (
@@ -222,7 +228,7 @@ export default function StudentDashboard() {
                 </div>
                 <div className="space-y-2">
                   {recentAttempts.map((a) => {
-                    const pct = Math.round(a.total_score)
+                    const pct = Math.round(normalizeScore100(a.total_score))
                     const scoreClass = pct >= 80 ? "text-green-700 bg-green-50"
                       : pct >= 60 ? "text-yellow-700 bg-yellow-50"
                       : "text-red-700 bg-red-50"

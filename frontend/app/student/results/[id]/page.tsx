@@ -11,6 +11,12 @@ import {
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
+const normalizeScore100 = (score: number) => {
+  if (!Number.isFinite(score)) return 0
+  if (score > 0 && score <= 10) return score * 10
+  return score
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Tipe data dari backend GET /api/exams/attempt/:attempt_token
 // ─────────────────────────────────────────────────────────────────────
@@ -119,7 +125,21 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
 
   const isTeacherViewing = user.role === "teacher"
 
-  const pct = data.max_score > 0 ? Math.round((data.total_score / data.max_score) * 100) : 0
+  const normalizedAnswers = data.answers.map((answer) => {
+    const displayFinalScore = normalizeScore100(answer.final_score || 0)
+    return {
+      ...answer,
+      displayFinalScore,
+      displayIsCorrect: displayFinalScore >= 60
+    }
+  })
+
+  const totalWeight = normalizedAnswers.reduce((sum, answer) => sum + (answer.weight || 1), 0) || 1
+  const computedTotalScore = normalizedAnswers.reduce(
+    (sum, answer) => sum + answer.displayFinalScore * ((answer.weight || 1) / totalWeight),
+    0
+  )
+  const pct = data.max_score > 0 ? Math.round((computedTotalScore / data.max_score) * 100) : 0
   const isGreat = pct >= 80
   const isOk = pct >= 60
   const scoreColor = isGreat ? "text-green-600" : isOk ? "text-yellow-600" : "text-red-600"
@@ -129,7 +149,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
     ? "from-yellow-50 to-yellow-100/50"
     : "from-red-50 to-red-100/50"
 
-  const correctCount = data.answers.filter((a) => a.is_correct).length
+  const correctCount = normalizedAnswers.filter((a) => a.displayIsCorrect).length
 
   const motivationalText = pct >= 90 ? "Luar Biasa! Sempurna! 🎉"
     : pct >= 80 ? "Bagus Sekali! Pertahankan! 👏"
@@ -165,7 +185,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
           </p>
           <p className={`text-7xl font-black mb-1 ${scoreColor}`}>{pct}</p>
           <p className="text-muted-foreground text-sm mb-4">
-            dari 100 · {data.total_score.toFixed(1)} poin
+            dari 100 · {computedTotalScore.toFixed(1)} poin
           </p>
           <p className={`text-base font-semibold ${scoreColor}`}>{motivationalText}</p>
 
@@ -222,8 +242,8 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
         {/* Tab: Overview */}
         {activeTab === "overview" && (
           <div className="space-y-3">
-            {data.answers.map((ans, i) => {
-              const finalScore = ans.final_score || 0
+            {normalizedAnswers.map((ans, i) => {
+              const finalScore = ans.displayFinalScore
               const pctSoal = Math.round(finalScore)
               return (
                 <div
@@ -231,9 +251,9 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
                   className="bg-white rounded-2xl border border-border p-4 flex items-center gap-4"
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    ans.is_correct ? "bg-green-50" : "bg-red-50"
+                    ans.displayIsCorrect ? "bg-green-50" : "bg-red-50"
                   }`}>
-                    {ans.is_correct
+                    {ans.displayIsCorrect
                       ? <CheckCircle2 className="w-4 h-4 text-green-600" />
                       : <XCircle className="w-4 h-4 text-red-500" />}
                   </div>
@@ -254,7 +274,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
         {/* Tab: Detail Jawaban */}
         {activeTab === "answers" && (
           <div className="space-y-4">
-            {data.answers.map((ans, i) => (
+            {normalizedAnswers.map((ans, i) => (
               <div key={ans.question_id} className="bg-white rounded-2xl border border-border overflow-hidden">
                 <div className="px-5 py-4 border-b border-border bg-muted/30">
                   <div className="flex items-start justify-between gap-3">
@@ -263,9 +283,9 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
                       <p className="text-sm font-semibold text-foreground">{ans.question_text}</p>
                     </div>
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${
-                      ans.is_correct ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                      ans.displayIsCorrect ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
                     }`}>
-                      {Math.round(ans.final_score)}/100
+                      {Math.round(ans.displayFinalScore)}/100
                     </span>
                   </div>
                 </div>
@@ -295,7 +315,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
                   {/* Feedback AI */}
                   {ans.feedback && (
                     <div className={`flex gap-2 px-3 py-2.5 rounded-lg text-sm ${
-                      ans.is_correct ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"
+                      ans.displayIsCorrect ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"
                     }`}>
                       <Sparkles className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       <div>

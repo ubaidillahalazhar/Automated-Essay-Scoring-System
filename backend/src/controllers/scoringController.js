@@ -1,24 +1,24 @@
 const prisma = require('../config/prismaClient');
 const { gradeEssayWithAI } = require('../services/aiService');
 
-/**
- * Normalisasi hasil AI grading agar selalu konsisten.
- *
- * Kontrak resmi AI service (lihat SYSTEM_PROMPT di ai-service/main.py):
- *   - skor       : 0-10 (boleh desimal)
- *   - nilai_100  : skor × 10  (skala 0-100)
- *
- * Masalahnya: model kadang return nilai_100 yang TIDAK sama dengan skor*10
- * (mis. {skor: 10, nilai_100: 10} → jawaban sempurna tapi tersimpan 10/100).
- * Maka di sini kita PAKSA konsistensi dengan men-derive nilai_100 dari skor,
- * supaya `final_score` di DB & tampilan frontend selalu betul.
- */
-function normalizeAiScore(aiResult) {
-  const skor10 = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
-  // Bulatkan ke 2 desimal supaya pas dengan Decimal(5,2) di Prisma schema.
-  const skor100 = Math.round(skor10 * 10 * 100) / 100;
-  return { skor10, skor100 };
-}
+// /**
+//  * Normalisasi hasil AI grading agar selalu konsisten.
+//  *
+//  * Kontrak resmi AI service (lihat SYSTEM_PROMPT di ai-service/main.py):
+//  *   - skor       : 0-10 (boleh desimal)
+//  *   - nilai_100  : skor × 10  (skala 0-100)
+//  *
+//  * Masalahnya: model kadang return nilai_100 yang TIDAK sama dengan skor*10
+//  * (mis. {skor: 10, nilai_100: 10} → jawaban sempurna tapi tersimpan 10/100).
+//  * Maka di sini kita PAKSA konsistensi dengan men-derive nilai_100 dari skor,
+//  * supaya `final_score` di DB & tampilan frontend selalu betul.
+//  */
+// function normalizeAiScore(aiResult) {
+//   const skor10 = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
+//   // Bulatkan ke 2 desimal supaya pas dengan Decimal(5,2) di Prisma schema.
+//   const skor100 = Math.round(skor10 * 10 * 100) / 100;
+//   return { skor10, skor100 };
+// }
 
 const submitAnswerAndGrade = async (req, res) => {
   try {

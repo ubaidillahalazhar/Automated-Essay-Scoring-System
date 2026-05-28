@@ -562,13 +562,13 @@ export default function TeacherDashboard() {
           )}
 
           {/* AI Analysis link */}
-          {quizzes.length > 0 && (
+          {/* {quizzes.length > 0 && (
             <Link href="/teacher/analysis" className={styles.analysisLink}>
               <BarChart2 width={16} height={16} />
               Lihat Analisis AI
               <ChevronRight width={16} height={16} />
             </Link>
-          )}
+          )} */}
         </main>
       </div>
 
