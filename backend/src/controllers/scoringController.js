@@ -1,6 +1,25 @@
 const prisma = require('../config/prismaClient');
 const { gradeEssayWithAI } = require('../services/aiService');
 
+/**
+ * Normalisasi hasil AI grading agar selalu konsisten.
+ *
+ * Kontrak resmi AI service (lihat SYSTEM_PROMPT di ai-service/main.py):
+ *   - skor       : 0-10 (boleh desimal)
+ *   - nilai_100  : skor × 10  (skala 0-100)
+ *
+ * Masalahnya: model kadang return nilai_100 yang TIDAK sama dengan skor*10
+ * (mis. {skor: 10, nilai_100: 10} → jawaban sempurna tapi tersimpan 10/100).
+ * Maka di sini kita PAKSA konsistensi dengan men-derive nilai_100 dari skor,
+ * supaya `final_score` di DB & tampilan frontend selalu betul.
+ */
+function normalizeAiScore(aiResult) {
+  const skor10 = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
+  // Bulatkan ke 2 desimal supaya pas dengan Decimal(5,2) di Prisma schema.
+  const skor100 = Math.round(skor10 * 10 * 100) / 100;
+  return { skor10, skor100 };
+}
+
 const submitAnswerAndGrade = async (req, res) => {
   try {
     // 1. Tangkap data dari Frontend Next.js
@@ -22,7 +41,7 @@ const submitAnswerAndGrade = async (req, res) => {
         user_id: user_id,
         question_id: question_id,
         answer_text: answer_text,
-        word_count: answer_text.split(/\s+/).length // Hitung kata sederhana
+        word_count: answer_text.trim().split(/\s+/).filter(Boolean).length
       }
     });
 
@@ -33,18 +52,33 @@ const submitAnswerAndGrade = async (req, res) => {
       answer_text
     );
 
-    // 5. Simpan hasil penilaian AI ke tabel Score
-    // (Perhatikan: scored_by tidak diisi karena ini otomatis dari AI)
+    // 5. Normalisasi skor — JANGAN langsung pakai aiResult.nilai_100.
+    const { skor10, skor100 } = normalizeAiScore(aiResult);
+
+    // Log kalau model mengirim nilai_100 yang inkonsisten — bantu debugging
+    // saat model mulai "ngaco" lagi di masa depan.
+    if (
+      typeof aiResult?.nilai_100 === 'number' &&
+      Math.abs(aiResult.nilai_100 - skor100) > 0.01
+    ) {
+      console.warn(
+        `⚠️ AI nilai_100 inkonsisten dengan skor*10 ` +
+        `(skor=${aiResult.skor}, nilai_100=${aiResult.nilai_100}, dipakai=${skor100}). ` +
+        `answer_id=${studentAnswer.answer_id}`
+      );
+    }
+
+    // 6. Simpan hasil penilaian AI ke tabel Score
     const finalScore = await prisma.score.create({
       data: {
         answer_id: studentAnswer.answer_id,
-        ai_score: aiResult.skor,
-        final_score: aiResult.nilai_100, // Jika kamu ingin menyimpan skala 100 di database
+        ai_score: skor10,        // skala 0-10 (raw skor dari AI)
+        final_score: skor100,    // skala 0-100 (dipakai frontend & total_score)
         feedback: aiResult.alasan
       }
     });
 
-    // 6. Kembalikan respons sukses ke Frontend
+    // 7. Kembalikan respons sukses ke Frontend
     res.status(200).json({
       message: "Jawaban berhasil dikirim dan dinilai oleh AI",
       data: {
