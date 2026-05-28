@@ -2,7 +2,7 @@ const prisma = require('../config/prismaClient');
 const { gradeEssayWithAI } = require('../services/aiService');
 
 // ==========================================
-// HELPER
+// HELPER token
 // ==========================================
 const encodeAttemptToken = (userId, quizId, timestamp) => {
   const raw = `${userId}:${quizId}:${timestamp}`;
@@ -13,68 +13,14 @@ const decodeAttemptToken = (token) => {
   try {
     const raw = Buffer.from(token, 'base64url').toString('utf8');
     const [userId, quizId, timestamp] = raw.split(':');
-    return {
-      userId: parseInt(userId),
-      quizId: parseInt(quizId),
-      timestamp: parseInt(timestamp)
-    };
+    return { userId: parseInt(userId), quizId: parseInt(quizId), timestamp: parseInt(timestamp) };
   } catch (e) {
     return null;
   }
 };
 
-const normalizeAiScore = (aiResult) => {
-  const aiScore = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
-  const finalScore = Math.round(aiScore * 10 * 100) / 100;
-  return { aiScore, finalScore };
-};
-
-const normalizeStoredScore = (score) => {
-  const aiScoreRaw = Number(score?.ai_score);
-  const finalScoreRaw = Number(score?.final_score);
-
-  const normalizeFinalScore = (value) => {
-    if (!Number.isFinite(value)) return 0;
-    if (value > 0 && value <= 10) return Math.round(value * 10 * 100) / 100;
-    return Math.max(0, Math.min(100, value));
-  };
-
-  if (Number.isFinite(aiScoreRaw)) {
-    const aiScore = Math.max(0, Math.min(10, aiScoreRaw));
-    const expectedFinal = Math.round(aiScore * 10 * 100) / 100;
-
-    if (
-      Number.isFinite(finalScoreRaw) &&
-      Math.abs(finalScoreRaw - expectedFinal) <= 0.01
-    ) {
-      return {
-        aiScore,
-        finalScore: normalizeFinalScore(finalScoreRaw)
-      };
-    }
-
-    return { aiScore, finalScore: expectedFinal };
-  }
-
-  if (Number.isFinite(finalScoreRaw)) {
-    return {
-      aiScore: Math.max(0, Math.min(10, finalScoreRaw > 0 && finalScoreRaw <= 10 ? finalScoreRaw : finalScoreRaw / 10)),
-      finalScore: normalizeFinalScore(finalScoreRaw)
-    };
-  }
-
-  return { aiScore: 0, finalScore: 0 };
-};
-
-/**
- * Helper: Group StudentAnswers menjadi "attempt" virtual.
- * Asumsi: jawaban-jawaban yang submission_date-nya berdekatan (<2 detik antar jawaban)
- * untuk quiz yang sama oleh siswa yang sama = satu attempt.
- */
 const groupAnswersIntoAttempts = (answers) => {
   if (answers.length === 0) return [];
-
-  // Sort by user_id, quiz_id, submission_date
   const sorted = [...answers].sort((a, b) => {
     if (a.user_id !== b.user_id) return a.user_id - b.user_id;
     const quizA = a.question.quiz_id;
@@ -85,39 +31,26 @@ const groupAnswersIntoAttempts = (answers) => {
 
   const attempts = [];
   let currentGroup = [sorted[0]];
-
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1];
     const curr = sorted[i];
-
     const sameUser = prev.user_id === curr.user_id;
     const sameQuiz = prev.question.quiz_id === curr.question.quiz_id;
     const timeDiff = Math.abs(curr.submission_date.getTime() - prev.submission_date.getTime());
-    // Anggap masih satu attempt kalau jeda < 60 detik (longgar untuk AI grading)
     const sameAttempt = sameUser && sameQuiz && timeDiff < 60_000;
-
-    if (sameAttempt) {
-      currentGroup.push(curr);
-    } else {
-      attempts.push(currentGroup);
-      currentGroup = [curr];
-    }
+    if (sameAttempt) currentGroup.push(curr);
+    else { attempts.push(currentGroup); currentGroup = [curr]; }
   }
   attempts.push(currentGroup);
-
   return attempts;
 };
 
 // ==========================================
-// 1. MEMBUAT KUIS & SOAL SEKALIGUS
+// 1. CREATE QUIZ
 // ==========================================
 const createQuizWithQuestions = async (req, res) => {
   try {
-    const {
-      title, description, subject_id, timeLimit, targetClass,
-      grade_id, dueDate, created_by, questions
-    } = req.body;
-
+    const { title, description, subject_id, timeLimit, targetClass, grade_id, dueDate, created_by, questions } = req.body;
     const result = await prisma.$transaction(async (tx) => {
       const quiz = await tx.quiz.create({
         data: {
@@ -130,30 +63,17 @@ const createQuizWithQuestions = async (req, res) => {
           created_by: parseInt(created_by)
         }
       });
-
       for (const q of questions) {
         const newQuestion = await tx.essayQuestion.create({
-          data: {
-            quiz_id: quiz.quiz_id,
-            question_text: q.text,
-            weight: q.points
-          }
+          data: { quiz_id: quiz.quiz_id, question_text: q.text, weight: q.points }
         });
         await tx.answerKey.create({
-          data: {
-            question_id: newQuestion.question_id,
-            key_text: q.correctAnswer
-          }
+          data: { question_id: newQuestion.question_id, key_text: q.correctAnswer }
         });
       }
       return quiz;
     });
-
-    res.status(201).json({
-      status: "success",
-      message: "Kuis beserta semua soal berhasil dibuat!",
-      data: result
-    });
+    res.status(201).json({ status: "success", message: "Kuis berhasil dibuat!", data: result });
   } catch (error) {
     console.error("❌ Error createQuizWithQuestions:", error);
     res.status(500).json({ message: "Gagal membuat kuis", error: error.message });
@@ -161,7 +81,7 @@ const createQuizWithQuestions = async (req, res) => {
 };
 
 // ==========================================
-// 2. MENAMBAHKAN SOAL & KUNCI JAWABAN
+// 2. ADD QUESTION
 // ==========================================
 const addQuestionWithKey = async (req, res) => {
   try {
@@ -175,7 +95,7 @@ const addQuestionWithKey = async (req, res) => {
       });
       return { question: newQuestion, answerKey: newAnswerKey };
     });
-    res.status(201).json({ message: "Soal dan Kunci Jawaban berhasil ditambahkan!", data: result });
+    res.status(201).json({ message: "Soal & Kunci ditambahkan!", data: result });
   } catch (error) {
     console.error("❌ Error addQuestionWithKey:", error);
     res.status(500).json({ message: "Gagal menambahkan soal", error: error.message });
@@ -183,7 +103,7 @@ const addQuestionWithKey = async (req, res) => {
 };
 
 // ==========================================
-// 3. DAFTAR KUIS MILIK GURU
+// 3. TEACHER QUIZZES
 // ==========================================
 const getTeacherQuizzes = async (req, res) => {
   try {
@@ -191,59 +111,46 @@ const getTeacherQuizzes = async (req, res) => {
     const quizzes = await prisma.quiz.findMany({
       where: { created_by: parseInt(teacher_id) },
       include: {
-        subject: { select: { subject_id: true, subject_name: true } },
-        grade:   { select: { grade_id: true, grade_name: true, school_level: true } },
-        _count:  { select: { questions: true } }
+        _count: { select: { questions: true } },
+        grade: { select: { grade_name: true, school_level: true } },
+        subject: { select: { subject_id: true, subject_name: true } }
       },
       orderBy: { created_at: 'desc' }
     });
-    res.status(200).json({ message: "Berhasil mengambil data kuis", data: quizzes });
+    res.status(200).json({ message: "Berhasil", data: quizzes });
   } catch (error) {
     console.error("❌ Error getTeacherQuizzes:", error);
-    res.status(500).json({ message: "Gagal mengambil data kuis", error: error.message });
+    res.status(500).json({ message: "Gagal mengambil kuis", error: error.message });
   }
 };
 
 // ==========================================
-// 4. DAFTAR KUIS UNTUK MURID (filter by school_level)
+// 4. AVAILABLE QUIZZES (siswa, by school_level)
 // ==========================================
 const getAvailableQuizzes = async (req, res) => {
   try {
     const { student_id } = req.params;
     const studentId = parseInt(student_id);
- 
     if (!studentId) return res.status(400).json({ message: "ID siswa tidak valid." });
- 
+
     const studentDetail = await prisma.userDetail.findUnique({
       where: { user_id: studentId },
       include: { grade: true }
     });
- 
     if (!studentDetail) return res.status(404).json({ message: "Data siswa tidak ditemukan." });
     if (!studentDetail.grade_id || !studentDetail.grade) {
-      return res.status(200).json({
-        status: "success", data: [],
-        message: "Siswa belum punya kelas. Lengkapi profil dulu."
-      });
+      return res.status(200).json({ status: "success", data: [], message: "Siswa belum punya kelas." });
     }
- 
+
     const schoolLevel = studentDetail.grade.school_level;
     const gradesInSameLevel = await prisma.grade.findMany({
       where: { school_level: schoolLevel },
       select: { grade_id: true }
     });
     const gradeIds = gradesInSameLevel.map(g => g.grade_id);
- 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // PERUBAHAN UTAMA: hapus filter `due_date: { gte: new Date() }`
-    // Sekarang semua quiz untuk grade siswa dibalikkan, termasuk yang
-    // sudah lewat. Frontend yang akan kategorikan ke tab masing-masing.
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     const quizzes = await prisma.quiz.findMany({
-      where: {
-        grade_id: { in: gradeIds }
-        // due_date filter dihapus
-      },
+      where: { grade_id: { in: gradeIds } },
       include: {
         teacher: { select: { name: true } },
         subject: { select: { subject_name: true } },
@@ -252,28 +159,20 @@ const getAvailableQuizzes = async (req, res) => {
       },
       orderBy: { created_at: 'desc' }
     });
- 
+
     const quizIds = quizzes.map(q => q.quiz_id);
     const completedQuizIds = new Set();
     if (quizIds.length > 0) {
       const answers = await prisma.studentAnswer.findMany({
-        where: {
-          user_id: studentId,
-          question: { quiz_id: { in: quizIds } }
-        },
+        where: { user_id: studentId, question: { quiz_id: { in: quizIds } } },
         select: { question: { select: { quiz_id: true } } }
       });
       for (const a of answers) completedQuizIds.add(a.question.quiz_id);
     }
- 
-    const enriched = quizzes.map(q => ({
-      ...q,
-      is_completed: completedQuizIds.has(q.quiz_id)
-    }));
- 
+
+    const enriched = quizzes.map(q => ({ ...q, is_completed: completedQuizIds.has(q.quiz_id) }));
     res.status(200).json({
-      status: "success",
-      data: enriched,
+      status: "success", data: enriched,
       student_info: {
         grade_id: studentDetail.grade_id,
         grade_name: studentDetail.grade.grade_name,
@@ -285,12 +184,9 @@ const getAvailableQuizzes = async (req, res) => {
     res.status(500).json({ message: "Gagal mengambil kuis", error: error.message });
   }
 };
- 
-module.exports = { getAvailableQuizzes };
- 
 
 // ==========================================
-// 5. MURID MEMBUKA KUIS
+// 5. QUIZ QUESTIONS (siswa buka kuis)
 // ==========================================
 const getQuizQuestions = async (req, res) => {
   try {
@@ -315,19 +211,18 @@ const getQuizQuestions = async (req, res) => {
 };
 
 // ==========================================
-// 6. SUBMIT JAWABAN + PENILAIAN AI
+// 6. SUBMIT ANSWERS + AI GRADING
+// (Score dibuat dengan is_approved = false by default)
 // ==========================================
 const submitAnswers = async (req, res) => {
   try {
     const { quiz_id } = req.params;
     const { user_id, answers, time_taken } = req.body;
-
     if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ message: "Tidak ada jawaban yang dikirim." });
     }
 
     const submitTimestamp = Date.now();
-
     const submittedAnswers = await prisma.$transaction(async (tx) => {
       const created = [];
       for (const ans of answers) {
@@ -355,80 +250,53 @@ const submitAnswers = async (req, res) => {
     const scoreResults = [];
     for (const ans of submittedAnswers) {
       const q = questionMap.get(ans.question_id);
-
       if (!q || !q.answerKey) {
         const fallback = await prisma.score.create({
           data: {
             answer_id: ans.answer_id, ai_score: 0, final_score: 0,
-            feedback: "Kunci jawaban tidak ditemukan, soal ini perlu dinilai manual."
+            feedback: "Kunci jawaban tidak ditemukan, perlu dinilai manual.",
+            is_approved: false
           }
         });
-        scoreResults.push({
-          answer_id: ans.answer_id, question_id: ans.question_id,
-          ai_score: 0, final_score: 0, feedback: fallback.feedback, error: true
-        });
+        scoreResults.push({ answer_id: ans.answer_id, question_id: ans.question_id, error: true });
         continue;
       }
-
       try {
-        const aiResult = await gradeEssayWithAI(
-          q.question_text, q.answerKey.key_text, ans.answer_text
-        );
-        const { aiScore, finalScore } = normalizeAiScore(aiResult);
-
-        const savedScore = await prisma.score.create({
+        const aiResult = await gradeEssayWithAI(q.question_text, q.answerKey.key_text, ans.answer_text);
+        await prisma.score.create({
           data: {
             answer_id: ans.answer_id,
-            ai_score: aiScore,
-            final_score: finalScore,
-            feedback: aiResult.alasan
+            ai_score: aiResult.skor,
+            final_score: aiResult.nilai_100,
+            feedback: aiResult.alasan,
+            is_approved: false   // ← WAJIB false, guru harus approve dulu
           }
         });
-        scoreResults.push({
-          answer_id: ans.answer_id, question_id: ans.question_id,
-          ai_score: Number(savedScore.ai_score),
-          final_score: Number(savedScore.final_score),
-          feedback: savedScore.feedback, error: false
-        });
+        scoreResults.push({ answer_id: ans.answer_id, question_id: ans.question_id, error: false });
       } catch (aiError) {
         console.error(`❌ AI gagal answer_id ${ans.answer_id}:`, aiError.message);
-        const fallback = await prisma.score.create({
+        await prisma.score.create({
           data: {
             answer_id: ans.answer_id, ai_score: 0, final_score: 0,
-            feedback: `AI gagal menilai: ${aiError.message}. Mohon dinilai manual oleh guru.`
+            feedback: `AI gagal menilai: ${aiError.message}. Mohon dinilai manual oleh guru.`,
+            is_approved: false
           }
         });
-        scoreResults.push({
-          answer_id: ans.answer_id, question_id: ans.question_id,
-          ai_score: 0, final_score: 0, feedback: fallback.feedback, error: true
-        });
+        scoreResults.push({ answer_id: ans.answer_id, question_id: ans.question_id, error: true });
       }
     }
 
-    const totalWeight = questionsWithKey.reduce((s, q) => s + (q.weight ? Number(q.weight) : 1), 0);
-    let totalScore = 0;
-    for (const sr of scoreResults) {
-      const q = questionMap.get(sr.question_id);
-      const w = q && q.weight ? Number(q.weight) : 1;
-      totalScore += (sr.final_score || 0) * (w / totalWeight);
-    }
-    totalScore = Math.round(totalScore * 100) / 100;
-
     const attemptToken = encodeAttemptToken(user_id, quiz_id, submitTimestamp);
-
     res.status(201).json({
       status: "success",
-      message: "Jawaban berhasil dikumpulkan dan dinilai oleh AI!",
+      message: "Jawaban berhasil dikumpulkan! Menunggu koreksi guru.",
       data: {
         attempt_token: attemptToken,
         quiz_id: parseInt(quiz_id),
         user_id: parseInt(user_id),
         submitted_at: new Date(submitTimestamp).toISOString(),
         time_taken: time_taken || 0,
-        answers: submittedAnswers,
-        scores: scoreResults,
-        total_score: totalScore,
-        max_score: 100
+        is_approved: false
       }
     });
   } catch (error) {
@@ -438,17 +306,19 @@ const submitAnswers = async (req, res) => {
 };
 
 // ==========================================
-// 7. GET HASIL ATTEMPT (detail)
+// 7. GET ATTEMPT RESULT
+// Query param ?viewer=teacher|student
+//   - teacher: lihat semua data + status approval
+//   - student: kalau belum semua approved → sembunyikan nilai
 // ==========================================
 const getAttemptResult = async (req, res) => {
   try {
     const { attempt_token } = req.params;
+    const viewer = req.query.viewer === "teacher" ? "teacher" : "student";
     const decoded = decodeAttemptToken(attempt_token);
-
     if (!decoded || !decoded.userId || !decoded.quizId || !decoded.timestamp) {
       return res.status(400).json({ message: "Token attempt tidak valid." });
     }
-
     const { userId, quizId, timestamp } = decoded;
 
     const [quiz, student] = await Promise.all([
@@ -457,24 +327,16 @@ const getAttemptResult = async (req, res) => {
         include: {
           teacher: { select: { name: true } },
           subject: { select: { subject_name: true } },
-          questions: {
-            include: { answerKey: true },
-            orderBy: { question_id: 'asc' }
-          }
+          questions: { include: { answerKey: true }, orderBy: { question_id: 'asc' } }
         }
       }),
-      prisma.user.findUnique({
-        where: { user_id: userId },
-        select: { user_id: true, name: true }
-      })
+      prisma.user.findUnique({ where: { user_id: userId }, select: { user_id: true, name: true } })
     ]);
-
     if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan." });
     if (!student) return res.status(404).json({ message: "Siswa tidak ditemukan." });
 
     const windowStart = new Date(timestamp - 10_000);
     const windowEnd = new Date(timestamp + 10_000 + 5 * 60_000);
-
     const questionIds = quiz.questions.map(q => q.question_id);
 
     const studentAnswers = await prisma.studentAnswer.findMany({
@@ -486,49 +348,62 @@ const getAttemptResult = async (req, res) => {
       include: { score: true },
       orderBy: { submission_date: 'asc' }
     });
-
     if (studentAnswers.length === 0) {
-      return res.status(404).json({
-        message: "Data attempt tidak ditemukan. Mungkin sudah lewat atau token kadaluwarsa."
-      });
+      return res.status(404).json({ message: "Data attempt tidak ditemukan." });
     }
 
     const answerByQuestion = new Map();
     for (const a of studentAnswers) {
       const existing = answerByQuestion.get(a.question_id);
-      if (!existing) {
-        answerByQuestion.set(a.question_id, a);
-      } else {
+      if (!existing) answerByQuestion.set(a.question_id, a);
+      else {
         const distOld = Math.abs(existing.submission_date.getTime() - timestamp);
         const distNew = Math.abs(a.submission_date.getTime() - timestamp);
         if (distNew < distOld) answerByQuestion.set(a.question_id, a);
       }
     }
 
+    // Hitung status approval keseluruhan
+    const allScores = quiz.questions
+      .map(q => answerByQuestion.get(q.question_id)?.score)
+      .filter(Boolean);
+    const totalScored = allScores.length;
+    const approvedCount = allScores.filter(s => s.is_approved).length;
+    const isFullyApproved = totalScored > 0 && approvedCount === totalScored;
+
     const totalWeight = quiz.questions.reduce((s, q) => s + (q.weight ? Number(q.weight) : 1), 0);
     let totalScore = 0;
     const answersPayload = quiz.questions.map((q) => {
       const a = answerByQuestion.get(q.question_id);
-      const { finalScore, aiScore } = normalizeStoredScore(a?.score);
+      const score = a?.score;
+      const finalScore = score?.final_score ? Number(score.final_score) : 0;
+      const aiScore = score?.ai_score ? Number(score.ai_score) : 0;
       const weight = q.weight ? Number(q.weight) : 1;
+      const approved = !!score?.is_approved;
       totalScore += finalScore * (weight / totalWeight);
+
+      // Untuk siswa: kalau belum fully approved, sembunyikan semua angka & feedback
+      const hideForStudent = viewer === "student" && !isFullyApproved;
 
       return {
         question_id: q.question_id,
         question_text: q.question_text,
         weight,
-        answer_key: q.answerKey?.key_text || null,
+        score_id: score?.score_id || null,
         answer_id: a?.answer_id || null,
         answer_text: a?.answer_text || "",
-        ai_score: aiScore,
-        final_score: finalScore,
-        feedback: a?.score?.feedback || null,
-        is_correct: finalScore >= 60
+        answer_key: viewer === "teacher" ? (q.answerKey?.key_text || null) : null,
+        ai_score: hideForStudent ? null : aiScore,
+        final_score: hideForStudent ? null : finalScore,
+        feedback: hideForStudent ? null : (score?.feedback || null),
+        is_approved: approved,
+        is_correct: hideForStudent ? null : (finalScore >= 60)
       };
     });
 
     totalScore = Math.round(totalScore * 100) / 100;
     const earliestSubmission = studentAnswers[0].submission_date;
+    const hideTotal = viewer === "student" && !isFullyApproved;
 
     res.status(200).json({
       status: "success",
@@ -544,8 +419,12 @@ const getAttemptResult = async (req, res) => {
         student: { user_id: student.user_id, name: student.name },
         completed_at: earliestSubmission.toISOString(),
         answers: answersPayload,
-        total_score: totalScore,
-        max_score: 100
+        total_score: hideTotal ? null : totalScore,
+        max_score: 100,
+        // Status approval
+        is_fully_approved: isFullyApproved,
+        approved_count: approvedCount,
+        total_questions: totalScored
       }
     });
   } catch (error) {
@@ -555,14 +434,12 @@ const getAttemptResult = async (req, res) => {
 };
 
 // ==========================================
-// 8. LIST ATTEMPTS MILIK SISWA (untuk halaman /student/results)
-// Endpoint: GET /api/exams/student/:student_id/attempts
+// 8. STUDENT ATTEMPTS LIST (dengan status approval)
 // ==========================================
 const getStudentAttempts = async (req, res) => {
   try {
     const { student_id } = req.params;
     const studentId = parseInt(student_id);
-
     if (!studentId) return res.status(400).json({ message: "ID siswa tidak valid." });
 
     const allAnswers = await prisma.studentAnswer.findMany({
@@ -570,12 +447,10 @@ const getStudentAttempts = async (req, res) => {
       include: {
         question: {
           select: {
-            quiz_id: true,
-            weight: true,
+            quiz_id: true, weight: true,
             quiz: {
               select: {
-                quiz_id: true,
-                title: true,
+                quiz_id: true, title: true,
                 subject: { select: { subject_name: true } },
                 grade: { select: { grade_name: true } }
               }
@@ -586,36 +461,25 @@ const getStudentAttempts = async (req, res) => {
       },
       orderBy: { submission_date: 'desc' }
     });
+    if (allAnswers.length === 0) return res.status(200).json({ status: "success", data: [] });
 
-    if (allAnswers.length === 0) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
-
-    // Group menjadi attempts
     const groups = groupAnswersIntoAttempts(allAnswers);
-
-    // Convert tiap group jadi attempt summary
     const attempts = groups.map(group => {
       const first = group[0];
       const quiz = first.question.quiz;
-      const totalWeight = group.reduce(
-        (s, a) => s + (a.question.weight ? Number(a.question.weight) : 1), 0
-      );
+      const totalWeight = group.reduce((s, a) => s + (a.question.weight ? Number(a.question.weight) : 1), 0);
       let totalScore = 0;
       for (const a of group) {
         const w = a.question.weight ? Number(a.question.weight) : 1;
-        const { finalScore: fs } = normalizeStoredScore(a.score);
+        const fs = a.score?.final_score ? Number(a.score.final_score) : 0;
         totalScore += fs * (w / totalWeight);
       }
+      const earliest = group.reduce((min, a) => a.submission_date < min ? a.submission_date : min, group[0].submission_date);
+      const attemptToken = encodeAttemptToken(studentId, quiz.quiz_id, earliest.getTime());
 
-      const earliest = group.reduce(
-        (min, a) => a.submission_date < min ? a.submission_date : min,
-        group[0].submission_date
-      );
-
-      const attemptToken = encodeAttemptToken(
-        studentId, quiz.quiz_id, earliest.getTime()
-      );
+      // Status approval attempt
+      const scores = group.map(a => a.score).filter(Boolean);
+      const isFullyApproved = scores.length > 0 && scores.every(s => s.is_approved);
 
       return {
         attempt_token: attemptToken,
@@ -624,15 +488,15 @@ const getStudentAttempts = async (req, res) => {
         subject_name: quiz.subject?.subject_name || "",
         grade_name: quiz.grade?.grade_name || "",
         answer_count: group.length,
-        total_score: Math.round(totalScore * 100) / 100,
+        // Sembunyikan nilai kalau belum approved
+        total_score: isFullyApproved ? Math.round(totalScore * 100) / 100 : null,
         max_score: 100,
+        is_approved: isFullyApproved,
         completed_at: earliest.toISOString()
       };
     });
 
-    // Sort terbaru dulu
     attempts.sort((a, b) => b.completed_at.localeCompare(a.completed_at));
-
     res.status(200).json({ status: "success", data: attempts });
   } catch (error) {
     console.error("❌ Error getStudentAttempts:", error);
@@ -641,38 +505,31 @@ const getStudentAttempts = async (req, res) => {
 };
 
 // ==========================================
-// 9. LIST ATTEMPTS UNTUK GURU (semua siswa di quiz miliknya)
-// Endpoint: GET /api/exams/teacher/:teacher_id/attempts
+// 9. TEACHER ATTEMPTS LIST (dengan status approval)
 // ==========================================
 const getTeacherAttempts = async (req, res) => {
   try {
     const { teacher_id } = req.params;
     const teacherId = parseInt(teacher_id);
-
     if (!teacherId) return res.status(400).json({ message: "ID guru tidak valid." });
 
-    // Ambil semua quiz milik guru ini
     const myQuizzes = await prisma.quiz.findMany({
       where: { created_by: teacherId },
-      select: { quiz_id: true, title: true,
+      select: {
+        quiz_id: true, title: true,
         subject: { select: { subject_name: true } },
         grade: { select: { grade_name: true } }
       }
     });
     const myQuizIds = myQuizzes.map(q => q.quiz_id);
+    if (myQuizIds.length === 0) return res.status(200).json({ status: "success", data: [] });
 
-    if (myQuizIds.length === 0) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
-
-    // Ambil semua jawaban dari semua siswa untuk quiz-quiz tersebut
     const allAnswers = await prisma.studentAnswer.findMany({
       where: { question: { quiz_id: { in: myQuizIds } } },
       include: {
         question: {
           select: {
-            quiz_id: true,
-            weight: true,
+            quiz_id: true, weight: true,
             quiz: {
               select: {
                 quiz_id: true, title: true,
@@ -684,8 +541,7 @@ const getTeacherAttempts = async (req, res) => {
         },
         student: {
           select: {
-            user_id: true,
-            name: true,
+            user_id: true, name: true,
             userDetail: { select: { grade: { select: { grade_name: true } } } }
           }
         },
@@ -693,35 +549,25 @@ const getTeacherAttempts = async (req, res) => {
       },
       orderBy: { submission_date: 'desc' }
     });
-
-    if (allAnswers.length === 0) {
-      return res.status(200).json({ status: "success", data: [] });
-    }
+    if (allAnswers.length === 0) return res.status(200).json({ status: "success", data: [], quizzes: myQuizzes });
 
     const groups = groupAnswersIntoAttempts(allAnswers);
-
     const attempts = groups.map(group => {
       const first = group[0];
       const quiz = first.question.quiz;
-      const student = first.student;
-      const totalWeight = group.reduce(
-        (s, a) => s + (a.question.weight ? Number(a.question.weight) : 1), 0
-      );
+      const studentObj = first.student;
+      const totalWeight = group.reduce((s, a) => s + (a.question.weight ? Number(a.question.weight) : 1), 0);
       let totalScore = 0;
       for (const a of group) {
         const w = a.question.weight ? Number(a.question.weight) : 1;
-        const { finalScore: fs } = normalizeStoredScore(a.score);
+        const fs = a.score?.final_score ? Number(a.score.final_score) : 0;
         totalScore += fs * (w / totalWeight);
       }
+      const earliest = group.reduce((min, a) => a.submission_date < min ? a.submission_date : min, group[0].submission_date);
+      const attemptToken = encodeAttemptToken(studentObj.user_id, quiz.quiz_id, earliest.getTime());
 
-      const earliest = group.reduce(
-        (min, a) => a.submission_date < min ? a.submission_date : min,
-        group[0].submission_date
-      );
-
-      const attemptToken = encodeAttemptToken(
-        student.user_id, quiz.quiz_id, earliest.getTime()
-      );
+      const scores = group.map(a => a.score).filter(Boolean);
+      const isFullyApproved = scores.length > 0 && scores.every(s => s.is_approved);
 
       return {
         attempt_token: attemptToken,
@@ -729,23 +575,19 @@ const getTeacherAttempts = async (req, res) => {
         quiz_title: quiz.title,
         subject_name: quiz.subject?.subject_name || "",
         grade_name: quiz.grade?.grade_name || "",
-        student_id: student.user_id,
-        student_name: student.name,
-        student_class: student.userDetail?.grade?.grade_name || "",
+        student_id: studentObj.user_id,
+        student_name: studentObj.name,
+        student_class: studentObj.userDetail?.grade?.grade_name || "",
         answer_count: group.length,
-        total_score: Math.round(totalScore * 100) / 100,
+        total_score: Math.round(totalScore * 100) / 100,  // guru selalu lihat nilai
         max_score: 100,
+        is_approved: isFullyApproved,   // status koreksi
         completed_at: earliest.toISOString()
       };
     });
 
     attempts.sort((a, b) => b.completed_at.localeCompare(a.completed_at));
-
-    res.status(200).json({
-      status: "success",
-      data: attempts,
-      quizzes: myQuizzes
-    });
+    res.status(200).json({ status: "success", data: attempts, quizzes: myQuizzes });
   } catch (error) {
     console.error("❌ Error getTeacherAttempts:", error);
     res.status(500).json({ message: "Gagal mengambil daftar hasil", error: error.message });
@@ -753,280 +595,131 @@ const getTeacherAttempts = async (req, res) => {
 };
 
 // ==========================================
-// 10. HAPUS KUIS BERDASARKAN ID (khusus pemilik kuis)
-// Endpoint: DELETE /api/exams/:quiz_id
+// 10. EDIT SCORE (guru ubah skor + feedback satu jawaban)
+// Endpoint: PUT /api/exams/score/:score_id
+// Body: { final_score?, feedback? }
 // ==========================================
-const deleteQuizById = async (req, res) => {
+const updateScore = async (req, res) => {
   try {
-    const { quiz_id } = req.params;
-    const quizId = parseInt(quiz_id);
+    const { score_id } = req.params;
+    const { final_score, feedback } = req.body;
+    const scoreId = parseInt(score_id);
+    if (!scoreId) return res.status(400).json({ message: "Score ID tidak valid." });
 
-    if (!quizId) {
-      return res.status(400).json({ message: "ID kuis tidak valid." });
-    }
-
-    const teacherId = req.user?.userId;
-    if (!teacherId) {
-      return res.status(401).json({ message: "Token tidak valid." });
-    }
-
-    const quiz = await prisma.quiz.findUnique({
-      where: { quiz_id: quizId },
-      select: { quiz_id: true, created_by: true }
-    });
-
-    if (!quiz) {
-      return res.status(404).json({ message: "Kuis tidak ditemukan." });
-    }
-
-    if (quiz.created_by !== teacherId) {
-      return res.status(403).json({ message: "Anda tidak berhak menghapus kuis ini." });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      const questions = await tx.essayQuestion.findMany({
-        where: { quiz_id: quizId },
-        select: { question_id: true }
-      });
-
-      const questionIds = questions.map((q) => q.question_id);
-
-      if (questionIds.length > 0) {
-        const answers = await tx.studentAnswer.findMany({
-          where: { question_id: { in: questionIds } },
-          select: { answer_id: true }
-        });
-
-        const answerIds = answers.map((a) => a.answer_id);
-
-        if (answerIds.length > 0) {
-          await tx.score.deleteMany({
-            where: { answer_id: { in: answerIds } }
-          });
-        }
-
-        await tx.studentAnswer.deleteMany({
-          where: { question_id: { in: questionIds } }
-        });
-
-        await tx.answerKey.deleteMany({
-          where: { question_id: { in: questionIds } }
-        });
-
-        await tx.essayQuestion.deleteMany({
-          where: { quiz_id: quizId }
-        });
+    const data = {};
+    if (final_score !== undefined && final_score !== null) {
+      const fs = Number(final_score);
+      if (isNaN(fs) || fs < 0 || fs > 100) {
+        return res.status(400).json({ message: "Nilai harus antara 0-100." });
       }
+      data.final_score = fs;
+    }
+    if (feedback !== undefined) {
+      data.feedback = feedback;
+    }
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ message: "Tidak ada perubahan yang dikirim." });
+    }
 
-      await tx.quiz.delete({
-        where: { quiz_id: quizId }
-      });
+    const updated = await prisma.score.update({
+      where: { score_id: scoreId },
+      data
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       status: "success",
-      message: "Kuis berhasil dihapus."
+      message: "Nilai berhasil diperbarui.",
+      data: {
+        score_id: updated.score_id,
+        final_score: updated.final_score ? Number(updated.final_score) : 0,
+        feedback: updated.feedback,
+        is_approved: updated.is_approved
+      }
     });
   } catch (error) {
-    console.error("❌ Error deleteQuizById:", error);
-    return res.status(500).json({ message: "Gagal menghapus kuis", error: error.message });
+    console.error("❌ Error updateScore:", error);
+    res.status(500).json({ message: "Gagal memperbarui nilai.", error: error.message });
   }
 };
 
 // ==========================================
-// 11. DETAIL KUIS UNTUK HALAMAN EDIT GURU
-// Endpoint: GET /api/exams/:quiz_id/edit
+// 11. APPROVE SATU SCORE
+// Endpoint: PUT /api/exams/score/:score_id/approve
 // ==========================================
-const getTeacherQuizDetail = async (req, res) => {
+const approveScore = async (req, res) => {
   try {
-    const { quiz_id } = req.params;
-    const quizId = parseInt(quiz_id);
+    const { score_id } = req.params;
+    const scoreId = parseInt(score_id);
+    if (!scoreId) return res.status(400).json({ message: "Score ID tidak valid." });
 
-    if (!quizId) {
-      return res.status(400).json({ message: "ID kuis tidak valid." });
-    }
-
-    const teacherId = req.user?.userId;
-    if (!teacherId) {
-      return res.status(401).json({ message: "Token tidak valid." });
-    }
-
-    const quiz = await prisma.quiz.findUnique({
-      where: { quiz_id: quizId },
-      include: {
-        questions: {
-          include: {
-            answerKey: {
-              select: { key_text: true }
-            }
-          },
-          orderBy: { question_id: 'asc' }
-        }
-      }
+    const updated = await prisma.score.update({
+      where: { score_id: scoreId },
+      data: { is_approved: true, approved_at: new Date() }
     });
 
-    if (!quiz) {
-      return res.status(404).json({ message: "Kuis tidak ditemukan." });
-    }
-
-    if (quiz.created_by !== teacherId) {
-      return res.status(403).json({ message: "Anda tidak berhak mengakses kuis ini." });
-    }
-
-    return res.status(200).json({
+    res.status(200).json({
       status: "success",
-      data: quiz
+      message: "Nilai disetujui.",
+      data: { score_id: updated.score_id, is_approved: true }
     });
   } catch (error) {
-    console.error("❌ Error getTeacherQuizDetail:", error);
-    return res.status(500).json({ message: "Gagal mengambil detail kuis", error: error.message });
+    console.error("❌ Error approveScore:", error);
+    res.status(500).json({ message: "Gagal menyetujui nilai.", error: error.message });
   }
 };
 
 // ==========================================
-// 12. EDIT KUIS BERDASARKAN ID (khusus pemilik kuis)
-// Endpoint: PUT /api/exams/:quiz_id
+// 12. APPROVE SEMUA SCORE DALAM SATU ATTEMPT
+// Endpoint: PUT /api/exams/attempt/:attempt_token/approve-all
 // ==========================================
-const updateQuizById = async (req, res) => {
+const approveAllInAttempt = async (req, res) => {
   try {
-    const { quiz_id } = req.params;
-    const quizId = parseInt(quiz_id);
+    const { attempt_token } = req.params;
+    const decoded = decodeAttemptToken(attempt_token);
+    if (!decoded) return res.status(400).json({ message: "Token tidak valid." });
+    const { userId, quizId, timestamp } = decoded;
 
-    if (!quizId) {
-      return res.status(400).json({ message: "ID kuis tidak valid." });
-    }
-
-    const teacherId = req.user?.userId;
-    if (!teacherId) {
-      return res.status(401).json({ message: "Token tidak valid." });
-    }
-
-    const {
-      title,
-      description,
-      subject_id,
-      timeLimit,
-      grade_id,
-      dueDate,
-      questions
-    } = req.body;
-
-    const quiz = await prisma.quiz.findUnique({
+    // Ambil soal di quiz ini
+    const questions = await prisma.essayQuestion.findMany({
       where: { quiz_id: quizId },
-      select: { quiz_id: true, created_by: true }
+      select: { question_id: true }
+    });
+    const questionIds = questions.map(q => q.question_id);
+
+    const windowStart = new Date(timestamp - 10_000);
+    const windowEnd = new Date(timestamp + 10_000 + 5 * 60_000);
+
+    // Ambil jawaban siswa dalam window ini
+    const studentAnswers = await prisma.studentAnswer.findMany({
+      where: {
+        user_id: userId,
+        question_id: { in: questionIds },
+        submission_date: { gte: windowStart, lte: windowEnd }
+      },
+      include: { score: true }
     });
 
-    if (!quiz) {
-      return res.status(404).json({ message: "Kuis tidak ditemukan." });
+    const scoreIds = studentAnswers
+      .map(a => a.score?.score_id)
+      .filter(Boolean);
+
+    if (scoreIds.length === 0) {
+      return res.status(404).json({ message: "Tidak ada nilai untuk disetujui." });
     }
 
-    if (quiz.created_by !== teacherId) {
-      return res.status(403).json({ message: "Anda tidak berhak mengedit kuis ini." });
-    }
-
-    await prisma.$transaction(async (tx) => {
-      await tx.quiz.update({
-        where: { quiz_id: quizId },
-        data: {
-          title,
-          description,
-          subject_id: parseInt(subject_id),
-          time_limit: parseInt(timeLimit),
-          grade_id: parseInt(grade_id),
-          due_date: new Date(dueDate)
-        }
-      });
-
-      if (!Array.isArray(questions)) return;
-
-      const existingQuestions = await tx.essayQuestion.findMany({
-        where: { quiz_id: quizId },
-        select: { question_id: true }
-      });
-
-      const existingQuestionIds = new Set(existingQuestions.map((q) => q.question_id));
-      const keptQuestionIds = [];
-
-      for (const q of questions) {
-        if (q.question_id && existingQuestionIds.has(parseInt(q.question_id))) {
-          const questionId = parseInt(q.question_id);
-          keptQuestionIds.push(questionId);
-
-          await tx.essayQuestion.update({
-            where: { question_id: questionId },
-            data: {
-              question_text: q.text,
-              weight: q.points
-            }
-          });
-
-          await tx.answerKey.upsert({
-            where: { question_id: questionId },
-            update: { key_text: q.correctAnswer },
-            create: {
-              question_id: questionId,
-              key_text: q.correctAnswer
-            }
-          });
-        } else {
-          const newQuestion = await tx.essayQuestion.create({
-            data: {
-              quiz_id: quizId,
-              question_text: q.text,
-              weight: q.points
-            }
-          });
-
-          keptQuestionIds.push(newQuestion.question_id);
-
-          await tx.answerKey.create({
-            data: {
-              question_id: newQuestion.question_id,
-              key_text: q.correctAnswer
-            }
-          });
-        }
-      }
-
-      const removedQuestionIds = [...existingQuestionIds].filter(
-        (questionId) => !keptQuestionIds.includes(questionId)
-      );
-
-      if (removedQuestionIds.length > 0) {
-        const answers = await tx.studentAnswer.findMany({
-          where: { question_id: { in: removedQuestionIds } },
-          select: { answer_id: true }
-        });
-
-        const answerIds = answers.map((a) => a.answer_id);
-
-        if (answerIds.length > 0) {
-          await tx.score.deleteMany({
-            where: { answer_id: { in: answerIds } }
-          });
-        }
-
-        await tx.studentAnswer.deleteMany({
-          where: { question_id: { in: removedQuestionIds } }
-        });
-
-        await tx.answerKey.deleteMany({
-          where: { question_id: { in: removedQuestionIds } }
-        });
-
-        await tx.essayQuestion.deleteMany({
-          where: { question_id: { in: removedQuestionIds } }
-        });
-      }
+    await prisma.score.updateMany({
+      where: { score_id: { in: scoreIds } },
+      data: { is_approved: true, approved_at: new Date() }
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       status: "success",
-      message: "Kuis berhasil diperbarui."
+      message: `${scoreIds.length} nilai berhasil disetujui.`,
+      approved_count: scoreIds.length
     });
   } catch (error) {
-    console.error("❌ Error updateQuizById:", error);
-    return res.status(500).json({ message: "Gagal memperbarui kuis", error: error.message });
+    console.error("❌ Error approveAllInAttempt:", error);
+    res.status(500).json({ message: "Gagal menyetujui semua nilai.", error: error.message });
   }
 };
 
@@ -1040,7 +733,7 @@ module.exports = {
   getAttemptResult,
   getStudentAttempts,
   getTeacherAttempts,
-  deleteQuizById,
-  getTeacherQuizDetail,
-  updateQuizById
+  updateScore,
+  approveScore,
+  approveAllInAttempt
 };

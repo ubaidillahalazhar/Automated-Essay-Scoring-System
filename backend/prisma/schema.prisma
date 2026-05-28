@@ -157,4 +157,6 @@ model Score {
   updated_at  DateTime      @default(now()) @db.Timestamp(6)
   answer      StudentAnswer @relation(fields: [answer_id], references: [answer_id], onDelete: Cascade)
   teacher     User?          @relation("ScoredBy", fields: [scored_by], references: [user_id])
+  is_approved  Boolean   @default(false)
+  approved_at  DateTime?        
 }

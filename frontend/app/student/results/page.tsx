@@ -7,26 +7,11 @@ import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import {
   Trophy, ChevronRight, TrendingUp, Award, Clock,
-  Loader2, AlertCircle, BookOpen
+  Loader2, AlertCircle, BookOpen, Hourglass
 } from "lucide-react"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-const normalizeScore100 = (score: number) => {
-  if (!Number.isFinite(score)) return 0
-  if (score > 0 && score <= 10) return score * 10
-  return score
-}
-
-const normalizeAttemptTotal = (score: number) => {
-  if (!Number.isFinite(score)) return 0
-  if (score > 0 && score <= 10) return score * 10
-  return score
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Tipe data dari GET /api/exams/student/:id/attempts
-// ─────────────────────────────────────────────────────────────────────
 interface AttemptFromDB {
   attempt_token: string
   quiz_id: number
@@ -34,8 +19,9 @@ interface AttemptFromDB {
   subject_name: string
   grade_name: string
   answer_count: number
-  total_score: number
+  total_score: number | null   // null = belum diapprove
   max_score: number
+  is_approved: boolean
   completed_at: string
 }
 
@@ -53,8 +39,6 @@ export default function StudentResultsList() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-
-    // Capture user.id sebagai local const supaya TypeScript yakin non-null
     const userId = user.id
 
     async function fetchAttempts() {
@@ -64,7 +48,6 @@ export default function StudentResultsList() {
         const res = await fetch(`${BACKEND_URL}/api/exams/student/${userId}/attempts`)
         const json = await res.json()
         if (cancelled) return
-
         if (!res.ok) {
           setError(json.message || "Gagal mengambil daftar nilai.")
           setAttempts([])
@@ -96,13 +79,15 @@ export default function StudentResultsList() {
     )
   }
 
-  // Statistik
-  const avgScore = attempts.length
-    ? Math.round(attempts.reduce((s, a) => s + normalizeAttemptTotal(a.total_score), 0) / attempts.length)
+  // Statistik hanya dari attempt yang sudah approved
+  const approvedAttempts = attempts.filter(a => a.is_approved && a.total_score !== null)
+  const avgScore = approvedAttempts.length
+    ? Math.round(approvedAttempts.reduce((s, a) => s + (a.total_score || 0), 0) / approvedAttempts.length)
     : 0
-  const bestScore = attempts.length
-    ? Math.max(...attempts.map(a => Math.round(normalizeAttemptTotal(a.total_score))))
+  const bestScore = approvedAttempts.length
+    ? Math.max(...approvedAttempts.map(a => Math.round(a.total_score || 0)))
     : 0
+  const pendingCount = attempts.filter(a => !a.is_approved).length
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -111,19 +96,19 @@ export default function StudentResultsList() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-1">Nilai Saya</h1>
           <p className="text-muted-foreground">
-            Riwayat lengkap semua kuis yang telah kamu selesaikan.
+            Riwayat semua kuis yang telah kamu kumpulkan.
           </p>
         </div>
 
-        {/* Stat cards — hanya tampil kalau ada attempt */}
+        {/* Stat cards */}
         {!fetching && attempts.length > 0 && (
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white rounded-2xl border border-border p-4">
               <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
                 <Trophy className="w-5 h-5 text-primary" />
               </div>
-              <p className="text-2xl font-bold text-foreground">{attempts.length}</p>
-              <p className="text-xs text-muted-foreground">Kuis Selesai</p>
+              <p className="text-2xl font-bold text-foreground">{approvedAttempts.length}</p>
+              <p className="text-xs text-muted-foreground">Sudah Dinilai</p>
             </div>
             <div className="bg-white rounded-2xl border border-border p-4">
               <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center mb-3">
@@ -142,7 +127,22 @@ export default function StudentResultsList() {
           </div>
         )}
 
-        {/* Content */}
+        {/* Info banner kalau ada yang menunggu */}
+        {!fetching && pendingCount > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex gap-3">
+            <Hourglass className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {pendingCount} kuis menunggu koreksi guru
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Nilainya akan muncul setelah guru selesai mengoreksi.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* List */}
         {fetching ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -169,7 +169,8 @@ export default function StudentResultsList() {
         ) : (
           <div className="space-y-3">
             {attempts.map((a) => {
-              const pct = Math.round(normalizeAttemptTotal(a.total_score))
+              const approved = a.is_approved && a.total_score !== null
+              const pct = approved ? Math.round(a.total_score || 0) : 0
               const scoreClass = pct >= 80
                 ? "text-green-700 bg-green-50 border-green-100"
                 : pct >= 60
@@ -210,10 +211,18 @@ export default function StudentResultsList() {
                       </div>
                     </div>
 
-                    <div className={`text-center px-3 py-2 rounded-xl border ${scoreClass} flex-shrink-0`}>
-                      <p className="text-2xl font-bold leading-none">{pct}</p>
-                      <p className="text-[10px] font-medium mt-1">/100</p>
-                    </div>
+                    {/* Skor ATAU badge menunggu */}
+                    {approved ? (
+                      <div className={`text-center px-3 py-2 rounded-xl border ${scoreClass} flex-shrink-0`}>
+                        <p className="text-2xl font-bold leading-none">{pct}</p>
+                        <p className="text-[10px] font-medium mt-1">/100</p>
+                      </div>
+                    ) : (
+                      <div className="text-center px-3 py-2 rounded-xl border border-amber-100 bg-amber-50 flex-shrink-0">
+                        <Hourglass className="w-5 h-5 text-amber-600 mx-auto mb-0.5" />
+                        <p className="text-[10px] font-semibold text-amber-700">Menunggu</p>
+                      </div>
+                    )}
 
                     <ChevronRight className="w-5 h-5 text-muted-foreground/40 flex-shrink-0" />
                   </div>
