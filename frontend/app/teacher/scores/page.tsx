@@ -5,15 +5,12 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
-import { Search, ChevronRight, Clock, AlertCircle, Loader2, Users } from "lucide-react"
+import {
+  Search, ChevronRight, Clock, AlertCircle, Loader2, Users,
+  ShieldCheck, Hourglass
+} from "lucide-react"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
-const normalizeScore100 = (score: number) => {
-  if (!Number.isFinite(score)) return 0
-  if (score > 0 && score <= 10) return score * 10
-  return score
-}
 
 interface AttemptFromDB {
   attempt_token: string
@@ -27,6 +24,7 @@ interface AttemptFromDB {
   answer_count: number
   total_score: number
   max_score: number
+  is_approved: boolean
   completed_at: string
 }
 
@@ -44,6 +42,7 @@ export default function TeacherScores() {
   const [error, setError] = useState<string>("")
   const [search, setSearch] = useState("")
   const [filterQuiz, setFilterQuiz] = useState("all")
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved">("all")
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "teacher")) router.replace("/login")
@@ -52,8 +51,6 @@ export default function TeacherScores() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
-
-    // Capture user.id sebagai local const supaya TypeScript yakin non-null di dalam closure
     const userId = user.id
 
     async function fetchAttempts() {
@@ -63,7 +60,6 @@ export default function TeacherScores() {
         const res = await fetch(`${BACKEND_URL}/api/exams/teacher/${userId}/attempts`)
         const json = await res.json()
         if (cancelled) return
-
         if (!res.ok) {
           setError(json.message || "Gagal mengambil data nilai.")
           setAttempts([])
@@ -85,7 +81,6 @@ export default function TeacherScores() {
     return () => { cancelled = true }
   }, [user])
 
-  // ─── EARLY RETURN: TS sekarang yakin user non-null di bawah sini ───
   if (isLoading || !user) {
     return (
       <div className="flex min-h-screen bg-background">
@@ -99,6 +94,8 @@ export default function TeacherScores() {
 
   const filtered = attempts.filter((a) => {
     if (filterQuiz !== "all" && a.quiz_id !== parseInt(filterQuiz)) return false
+    if (filterStatus === "pending" && a.is_approved) return false
+    if (filterStatus === "approved" && !a.is_approved) return false
     if (search) {
       const q = search.toLowerCase()
       if (!a.student_name.toLowerCase().includes(q) &&
@@ -107,13 +104,9 @@ export default function TeacherScores() {
     return true
   })
 
-  // Statistik
-  const totalAttempts = filtered.length
-  const uniqueStudents = new Set(filtered.map(a => a.student_id)).size
-  const avgScore = totalAttempts
-    ? Math.round(filtered.reduce((s, a) => s + normalizeScore100(a.total_score), 0) / totalAttempts)
-    : 0
-  const passedCount = filtered.filter(a => a.total_score >= 70).length
+  const totalAttempts = attempts.length
+  const pendingCount = attempts.filter(a => !a.is_approved).length
+  const approvedCount = attempts.filter(a => a.is_approved).length
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -123,33 +116,59 @@ export default function TeacherScores() {
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-1">Nilai Siswa</h1>
           <p className="text-muted-foreground">
-            Hasil penilaian AI untuk semua siswa yang mengerjakan kuis Anda.
+            Koreksi dan setujui nilai sebelum siswa dapat melihatnya.
           </p>
         </div>
 
         {/* Summary cards */}
         {!fetching && totalAttempts > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-white rounded-2xl border border-border p-4">
-              <p className="text-xs text-muted-foreground mb-1">Total Pengerjaan</p>
+              <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
+                <Users className="w-5 h-5 text-primary" />
+              </div>
               <p className="text-2xl font-bold text-foreground">{totalAttempts}</p>
+              <p className="text-xs text-muted-foreground">Total Pengerjaan</p>
             </div>
             <div className="bg-white rounded-2xl border border-border p-4">
-              <p className="text-xs text-muted-foreground mb-1">Siswa Unik</p>
-              <p className="text-2xl font-bold text-foreground">{uniqueStudents}</p>
+              <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center mb-3">
+                <Hourglass className="w-5 h-5 text-amber-600" />
+              </div>
+              <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
+              <p className="text-xs text-muted-foreground">Menunggu Koreksi</p>
             </div>
             <div className="bg-white rounded-2xl border border-border p-4">
-              <p className="text-xs text-muted-foreground mb-1">Rata-rata Nilai</p>
-              <p className="text-2xl font-bold text-foreground">{avgScore}</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-border p-4">
-              <p className="text-xs text-muted-foreground mb-1">Lulus (≥70)</p>
-              <p className="text-2xl font-bold text-green-600">{passedCount}</p>
+              <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center mb-3">
+                <ShieldCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <p className="text-2xl font-bold text-green-600">{approvedCount}</p>
+              <p className="text-xs text-muted-foreground">Sudah Disetujui</p>
             </div>
           </div>
         )}
 
-        {/* Filter row */}
+        {/* Filter status pills */}
+        <div className="flex gap-2 mb-4">
+          {([
+            { id: "all", label: "Semua" },
+            { id: "pending", label: "Menunggu Koreksi" },
+            { id: "approved", label: "Sudah Disetujui" },
+          ] as const).map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilterStatus(f.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                filterStatus === f.id
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-white border border-border text-muted-foreground hover:border-primary/30"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search + quiz filter */}
         <div className="bg-white rounded-2xl border border-border p-4 mb-6 flex flex-wrap gap-3 items-center">
           <div className="flex-1 min-w-[200px] relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -188,14 +207,14 @@ export default function TeacherScores() {
             </p>
             <p className="text-sm text-muted-foreground">
               {attempts.length === 0
-                ? "Tunggu siswa mengerjakan kuis Anda untuk melihat hasil di sini."
+                ? "Tunggu siswa mengerjakan kuis Anda."
                 : "Coba ubah filter atau kata kunci pencarian."}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {filtered.map((attempt) => {
-              const pct = Math.round(normalizeScore100(attempt.total_score))
+              const pct = Math.round(attempt.total_score)
               const scoreClass = pct >= 80
                 ? "text-green-700 bg-green-50 border-green-100"
                 : pct >= 60
@@ -216,13 +235,21 @@ export default function TeacherScores() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="font-semibold text-foreground truncate">
-                          {attempt.student_name}
-                        </p>
+                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <p className="font-semibold text-foreground truncate">{attempt.student_name}</p>
                         {attempt.student_class && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
                             {attempt.student_class}
+                          </span>
+                        )}
+                        {/* Badge status koreksi */}
+                        {attempt.is_approved ? (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                            <ShieldCheck className="w-2.5 h-2.5" /> Disetujui
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                            <Hourglass className="w-2.5 h-2.5" /> Perlu dikoreksi
                           </span>
                         )}
                       </div>
