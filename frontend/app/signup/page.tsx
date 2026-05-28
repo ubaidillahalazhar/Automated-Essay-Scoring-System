@@ -352,7 +352,7 @@ export default function SignupPage() {
                 </select>
                 <input
                   type="number" value={birthYear} onChange={(e) => setBirthYear(e.target.value)}
-                  min="1990" max="2020"
+                  // min="999999" max="999"
                   className="signup-input signup-input--dob signup-input--dob-year"
                 />
               </div>

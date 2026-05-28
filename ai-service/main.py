@@ -265,10 +265,8 @@ def _normalize(data: dict) -> GradeResponse:
     skor = float(data.get("skor", 0))
     skor = max(0.0, min(10.0, skor))
 
-    nilai_100 = data.get("nilai_100")
-    if nilai_100 is None:
-        nilai_100 = skor * 10
-    nilai_100 = max(0.0, min(100.0, float(nilai_100)))
+   
+    nilai_100 = max(0.0, min(100.0, skor * 10))
 
     alasan = str(data.get("alasan", "")).strip() or "Tidak ada alasan dari model."
 
