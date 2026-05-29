@@ -1,8 +1,11 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import Cookies from "js-cookie";
 import { type User, getStoredUser, setStoredUser } from "./store"
+import { apiFetch } from "./api"
+
 
 interface UpdateProfilePayload {
   name?: string
@@ -39,6 +42,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(stored)
     setIsLoading(false)
   }, [])
+
+  const router = useRouter()
+
+useEffect(() => {
+  const handler = () => {
+    setUser(null);
+    setStoredUser(null);
+    localStorage.removeItem("token");
+    Cookies.remove("token");
+    router.replace("/login");
+  };
+  window.addEventListener('auth:unauthorized', handler);
+  return () => window.removeEventListener('auth:unauthorized', handler);
+}, [router])
+
 
   async function login(email: string, password: string): Promise<{ success: boolean; message: string }> {
     try {
@@ -110,13 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Update profil. Bisa update name, grade_id, atau keduanya.
    * Server hanya update field yang dikirim (PATCH-like).
    */
-  async function updateProfile(payload: UpdateProfilePayload): Promise<{ success: boolean; message: string }> {
+ async function updateProfile(payload: UpdateProfilePayload): Promise<{ success: boolean; message: string }> {
     if (!user) return { success: false, message: "Belum login." };
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/profile/${user.id}`, {
+      const response = await apiFetch(`/api/auth/profile/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -134,7 +151,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
-
   /**
    * Ganti password. Backend akan verifikasi password lama dulu.
    */
@@ -166,7 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function refreshProfile() {
     if (!user) return;
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/profile/${user.id}`);
+      const response = await apiFetch(`/api/auth/profile/${user.id}`);
       const data = await response.json();
       if (response.ok && data.user) {
         setUser(data.user);

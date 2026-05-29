@@ -1,6 +1,12 @@
 const prisma = require('../config/prismaClient');
 const { gradeEssayWithAI } = require('../services/aiService');
-
+const ensureOwn = (req, paramName) => {
+  const paramId = parseInt(req.params[paramName]);
+  if (!paramId || req.user.userId !== paramId) {
+    return { ok: false, status: 403, message: "Anda hanya boleh mengakses data sendiri." };
+  }
+  return { ok: true, userId: paramId };
+};
 // ==========================================
 // HELPER token
 // ==========================================
@@ -50,7 +56,8 @@ const groupAnswersIntoAttempts = (answers) => {
 // ==========================================
 const createQuizWithQuestions = async (req, res) => {
   try {
-    const { title, description, subject_id, timeLimit, targetClass, grade_id, dueDate, created_by, questions } = req.body;
+const { title, description, subject_id, timeLimit, grade_id, dueDate, questions } = req.body;
+const created_by = req.user.userId;
     const result = await prisma.$transaction(async (tx) => {
       const quiz = await tx.quiz.create({
         data: {
@@ -58,7 +65,6 @@ const createQuizWithQuestions = async (req, res) => {
           subject_id: parseInt(subject_id),
           time_limit: parseInt(timeLimit),
           grade_id: parseInt(grade_id),
-          target_class: targetClass,
           due_date: new Date(dueDate),
           created_by: parseInt(created_by)
         }
@@ -86,6 +92,13 @@ const createQuizWithQuestions = async (req, res) => {
 const addQuestionWithKey = async (req, res) => {
   try {
     const { quiz_id, question_text, weight, key_text } = req.body;
+
+    const quiz = await prisma.quiz.findUnique({ where: { quiz_id: parseInt(quiz_id) } });
+    if (!quiz) return res.status(404).json({ message: "Kuis tidak ditemukan." });
+    if (quiz.created_by !== req.user.userId) {
+      return res.status(403).json({ message: "Anda bukan pemilik kuis ini." });
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       const newQuestion = await tx.essayQuestion.create({
         data: { quiz_id, question_text, weight: weight || 1.00 }
@@ -107,9 +120,11 @@ const addQuestionWithKey = async (req, res) => {
 // ==========================================
 const getTeacherQuizzes = async (req, res) => {
   try {
-    const { teacher_id } = req.params;
+    const check = ensureOwn(req, 'teacher_id');
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+
     const quizzes = await prisma.quiz.findMany({
-      where: { created_by: parseInt(teacher_id) },
+      where: { created_by: check.userId },
       include: {
         _count: { select: { questions: true } },
         grade: { select: { grade_name: true, school_level: true } },
@@ -129,9 +144,9 @@ const getTeacherQuizzes = async (req, res) => {
 // ==========================================
 const getAvailableQuizzes = async (req, res) => {
   try {
-    const { student_id } = req.params;
-    const studentId = parseInt(student_id);
-    if (!studentId) return res.status(400).json({ message: "ID siswa tidak valid." });
+    const check = ensureOwn(req, 'student_id');
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const studentId = check.userId;
 
     const studentDetail = await prisma.userDetail.findUnique({
       where: { user_id: studentId },
@@ -217,8 +232,9 @@ const getQuizQuestions = async (req, res) => {
 const submitAnswers = async (req, res) => {
   try {
     const { quiz_id } = req.params;
-    const { user_id, answers, time_taken } = req.body;
-    if (!Array.isArray(answers) || answers.length === 0) {
+const { answers, time_taken } = req.body;
+const user_id = req.user.userId;
+if (!Array.isArray(answers) || answers.length === 0) {
       return res.status(400).json({ message: "Tidak ada jawaban yang dikirim." });
     }
 
@@ -314,12 +330,32 @@ const submitAnswers = async (req, res) => {
 const getAttemptResult = async (req, res) => {
   try {
     const { attempt_token } = req.params;
-    const viewer = req.query.viewer === "teacher" ? "teacher" : "student";
     const decoded = decodeAttemptToken(attempt_token);
     if (!decoded || !decoded.userId || !decoded.quizId || !decoded.timestamp) {
       return res.status(400).json({ message: "Token attempt tidak valid." });
     }
     const { userId, quizId, timestamp } = decoded;
+
+    const isTeacherViewer = req.user.roleId === 2;
+    const isStudentViewer = req.user.roleId === 3;
+
+    if (isStudentViewer) {
+      if (req.user.userId !== userId) {
+        return res.status(403).json({ message: "Bukan attempt Anda." });
+      }
+    } else if (isTeacherViewer) {
+      const owner = await prisma.quiz.findUnique({
+        where: { quiz_id: quizId }, select: { created_by: true }
+      });
+      if (!owner) return res.status(404).json({ message: "Kuis tidak ditemukan." });
+      if (owner.created_by !== req.user.userId) {
+        return res.status(403).json({ message: "Anda bukan pemilik kuis ini." });
+      }
+    } else {
+      return res.status(403).json({ message: "Role tidak diizinkan." });
+    }
+
+    const viewer = isTeacherViewer ? "teacher" : "student";
 
     const [quiz, student] = await Promise.all([
       prisma.quiz.findUnique({
@@ -438,9 +474,9 @@ const getAttemptResult = async (req, res) => {
 // ==========================================
 const getStudentAttempts = async (req, res) => {
   try {
-    const { student_id } = req.params;
-    const studentId = parseInt(student_id);
-    if (!studentId) return res.status(400).json({ message: "ID siswa tidak valid." });
+    const check = ensureOwn(req, 'student_id');
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const studentId = check.userId;
 
     const allAnswers = await prisma.studentAnswer.findMany({
       where: { user_id: studentId },
@@ -509,9 +545,9 @@ const getStudentAttempts = async (req, res) => {
 // ==========================================
 const getTeacherAttempts = async (req, res) => {
   try {
-    const { teacher_id } = req.params;
-    const teacherId = parseInt(teacher_id);
-    if (!teacherId) return res.status(400).json({ message: "ID guru tidak valid." });
+    const check = ensureOwn(req, 'teacher_id');
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const teacherId = check.userId;
 
     const myQuizzes = await prisma.quiz.findMany({
       where: { created_by: teacherId },
@@ -606,6 +642,15 @@ const updateScore = async (req, res) => {
     const scoreId = parseInt(score_id);
     if (!scoreId) return res.status(400).json({ message: "Score ID tidak valid." });
 
+    const scoreCheck = await prisma.score.findUnique({
+      where: { score_id: scoreId },
+      include: { answer: { include: { question: { select: { quiz: { select: { created_by: true } } } } } } }
+    });
+    if (!scoreCheck) return res.status(404).json({ message: "Nilai tidak ditemukan." });
+    if (scoreCheck.answer.question.quiz.created_by !== req.user.userId) {
+      return res.status(403).json({ message: "Anda bukan pemilik kuis ini." });
+    }
+
     const data = {};
     if (final_score !== undefined && final_score !== null) {
       const fs = Number(final_score);
@@ -652,6 +697,15 @@ const approveScore = async (req, res) => {
     const scoreId = parseInt(score_id);
     if (!scoreId) return res.status(400).json({ message: "Score ID tidak valid." });
 
+    const scoreCheck = await prisma.score.findUnique({
+      where: { score_id: scoreId },
+      include: { answer: { include: { question: { select: { quiz: { select: { created_by: true } } } } } } }
+    });
+    if (!scoreCheck) return res.status(404).json({ message: "Nilai tidak ditemukan." });
+    if (scoreCheck.answer.question.quiz.created_by !== req.user.userId) {
+      return res.status(403).json({ message: "Anda bukan pemilik kuis ini." });
+    }
+
     const updated = await prisma.score.update({
       where: { score_id: scoreId },
       data: { is_approved: true, approved_at: new Date() }
@@ -676,11 +730,18 @@ const approveAllInAttempt = async (req, res) => {
   try {
     const { attempt_token } = req.params;
     const decoded = decodeAttemptToken(attempt_token);
-    if (!decoded) return res.status(400).json({ message: "Token tidak valid." });
-    const { userId, quizId, timestamp } = decoded;
+if (!decoded) return res.status(400).json({ message: "Token tidak valid." });
+const { userId, quizId, timestamp } = decoded;
 
-    // Ambil soal di quiz ini
-    const questions = await prisma.essayQuestion.findMany({
+const quizOwner = await prisma.quiz.findUnique({
+  where: { quiz_id: quizId }, select: { created_by: true }
+});
+if (!quizOwner) return res.status(404).json({ message: "Kuis tidak ditemukan." });
+if (quizOwner.created_by !== req.user.userId) {
+  return res.status(403).json({ message: "Anda bukan pemilik kuis ini." });
+}
+
+const questions = await prisma.essayQuestion.findMany({
       where: { quiz_id: quizId },
       select: { question_id: true }
     });

@@ -9,6 +9,7 @@ import {
   Search, ChevronRight, Clock, AlertCircle, Loader2, Users,
   ShieldCheck, Hourglass
 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -57,7 +58,7 @@ export default function TeacherScores() {
       setFetching(true)
       setError("")
       try {
-        const res = await fetch(`${BACKEND_URL}/api/exams/teacher/${userId}/attempts`)
+        const res = await apiFetch(`/api/exams/teacher/${userId}/attempts`)
         const json = await res.json()
         if (cancelled) return
         if (!res.ok) {

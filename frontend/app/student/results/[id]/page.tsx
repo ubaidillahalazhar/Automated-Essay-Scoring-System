@@ -8,6 +8,7 @@ import {
   CheckCircle2, XCircle, ChevronLeft, Sparkles, AlertCircle, Loader2,
   Trophy, Award, Target, Clock, Pencil, Save, X, Check, ShieldCheck, Hourglass
 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -56,7 +57,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
     setError("")
     try {
       const viewer = isTeacher ? "teacher" : "student"
-      const res = await fetch(`${BACKEND_URL}/api/exams/attempt/${id}?viewer=${viewer}`)
+      const res = await apiFetch(`${BACKEND_URL}/api/exams/attempt/${id}?viewer=${viewer}`)
       const json = await res.json()
       if (!res.ok) {
         setError(json.message || "Gagal memuat hasil.")
@@ -86,7 +87,7 @@ export default function ResultDetailPage({ params }: { params: Promise<{ id: str
     if (!data) return
     setApprovingAll(true)
     try {
-      const res = await fetch(`${BACKEND_URL}/api/exams/attempt/${data.attempt_token}/approve-all`, {
+      const res = await apiFetch(`${BACKEND_URL}/api/exams/attempt/${data.attempt_token}/approve-all`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" }
       })
