@@ -2,6 +2,13 @@ const prisma = require('../config/prismaClient');
 const { hashPassword, comparePassword } = require('../utils/bcryptUtils');
 const { sendOtpEmail } = require('../utils/emailUtils');
 const jwt = require('jsonwebtoken');
+const ensureSelf = (req) => {
+  const paramId = parseInt(req.params.user_id);
+  if (!paramId || req.user.userId !== paramId) {
+    return { ok: false, status: 403, message: "Anda hanya boleh mengakses data sendiri." };
+  }
+  return { ok: true, userId: paramId };
+};
 
 // ==========================================
 // 1. REGISTRASI
@@ -172,9 +179,9 @@ const login = async (req, res) => {
 // ==========================================
 const getProfile = async (req, res) => {
   try {
-    const { user_id } = req.params;
-    const userId = parseInt(user_id);
-    if (!userId) return res.status(400).json({ message: "User ID tidak valid." });
+    const check = ensureSelf(req);
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const userId = check.userId;
 
     const userDetail = await prisma.userDetail.findUnique({
       where: { user_id: userId },
@@ -215,12 +222,10 @@ const getProfile = async (req, res) => {
 // ==========================================
 const updateProfile = async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const check = ensureSelf(req);
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const userId = check.userId;
     const { name, grade_id } = req.body;
-
-    if (!user_id) return res.status(400).json({ message: "User ID wajib." });
-
-    const userId = parseInt(user_id);
 
     // Validasi: minimal salah satu field harus ada
     if (!name && !grade_id) {
@@ -292,11 +297,10 @@ const updateProfile = async (req, res) => {
 // ==========================================
 const changePassword = async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const check = ensureSelf(req);
+    if (!check.ok) return res.status(check.status).json({ message: check.message });
+    const userId = check.userId;
     const { old_password, new_password } = req.body;
-    const userId = parseInt(user_id);
-
-    if (!userId) return res.status(400).json({ message: "User ID tidak valid." });
     if (!old_password) return res.status(400).json({ message: "Password lama wajib diisi." });
     if (!new_password) return res.status(400).json({ message: "Password baru wajib diisi." });
     if (new_password.length < 6) {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { AlertCircle, Loader2, CheckCircle2 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -37,7 +38,7 @@ export function CompleteProfileModal() {
     let cancelled = false
     setLoadingGrades(true)
 
-    fetch(`${BACKEND_URL}/api/grades`)
+    apiFetch(`/api/grades`)
       .then(r => r.json())
       .then(data => {
         if (cancelled) return
@@ -63,7 +64,7 @@ export function CompleteProfileModal() {
     }
     setSaving(true)
     setError("")
-    const result = await updateProfile(selectedGradeId)
+    const result = await updateProfile({ grade_id: selectedGradeId })
     if (!result.success) {
       setError(result.message)
       setSaving(false)

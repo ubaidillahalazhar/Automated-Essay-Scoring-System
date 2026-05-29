@@ -11,6 +11,7 @@ import {
   MessageCircle, Search, Pencil, Trash2, Loader2, AlertTriangle, X, PlusSquare
 } from "lucide-react"
 import styles from "@/styles/teacher-dashboard.module.css"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 const LS_GRADE_FILTER_KEY = "teacher_dashboard_grade_filter"
@@ -301,11 +302,10 @@ export default function TeacherDashboard() {
       setFetching(true)
       try {
         const [quizzesRes, subjectsRes, gradesRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/exams/teacher/${userId}`),
-          fetch(`${BACKEND_URL}/api/subjects/teacher/${userId}`),
-          fetch(`${BACKEND_URL}/api/grades`),
-        ])
-
+  apiFetch(`/api/exams/teacher/${userId}`),
+  apiFetch(`/api/subjects/teacher/${userId}`),
+  apiFetch(`/api/grades`),
+])
         const quizzesJson = await quizzesRes.json()
         const subjectsJson = await subjectsRes.json()
         const gradesJson = await gradesRes.json()

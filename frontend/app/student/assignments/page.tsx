@@ -6,6 +6,7 @@ import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import { Clock, BookOpen, CheckCircle2, AlertCircle, Circle, Loader2, XCircle } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -62,7 +63,7 @@ export default function StudentAssignments() {
       setFetching(true)
       setError("")
       try {
-        const res = await fetch(`${BACKEND_URL}/api/exams/student/${userId}/available`)
+        const res = await apiFetch(`${BACKEND_URL}/api/exams/student/${userId}/available`)
         const json = await res.json()
         if (cancelled) return
 

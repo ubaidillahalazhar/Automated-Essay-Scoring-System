@@ -7,6 +7,7 @@ import {
   Clock, ChevronLeft, ChevronRight, AlertTriangle, BookOpen,
   Loader2, AlertCircle, CheckCircle2, Sparkles
 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -71,7 +72,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       setLoadingQuiz(true)
       setLoadError("")
       try {
-        const res = await fetch(`${BACKEND_URL}/api/exams/${id}/start`)
+        const res = await apiFetch(`/api/exams/${id}/start`)
         const json = await res.json()
         if (cancelled) return
 
@@ -109,7 +110,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
 
     async function checkIfDone() {
       try {
-        const res = await fetch(`${BACKEND_URL}/api/exams/student/${user!.id}/attempts`)
+        const res = await apiFetch(`/api/exams/student/${user!.id}/attempts`)
         const json = await res.json()
         if (cancelled) return
         if (res.ok && Array.isArray(json.data)) {
@@ -148,15 +149,14 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       const timeoutMs = Math.max(60_000, quiz.questions.length * 90_000)
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
-      const response = await fetch(
-        `${BACKEND_URL}/api/exams/${quiz.quiz_id}/submit`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        }
-      )
+      const response = await apiFetch(
+  `/api/exams/${quiz.quiz_id}/submit`,
+  {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    signal: controller.signal
+  }
+)
 
       clearTimeout(timeoutId)
       const result = await response.json()

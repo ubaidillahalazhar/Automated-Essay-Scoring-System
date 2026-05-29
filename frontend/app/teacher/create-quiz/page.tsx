@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import { type Question } from "@/lib/store"
 import { Plus, Trash2, GripVertical, ChevronDown, ChevronUp, Save, CheckCircle2 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 interface GradeDB {
   grade_id: number;
@@ -60,7 +61,7 @@ export default function CreateQuizPage() {
         const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
         
         // 1. Fetch Daftar Kelas
-        const resGrades = await fetch(`${BACKEND_URL}/api/grades`);
+        const resGrades = await apiFetch(`/api/grades`);
         const dataGrades = await resGrades.json();
         if (resGrades.ok && dataGrades.data) {
           setAvailableGrades(dataGrades.data);
@@ -68,7 +69,7 @@ export default function CreateQuizPage() {
         }
 
         // 2. Fetch Daftar Mata Pelajaran Guru
-        const resSubjects = await fetch(`${BACKEND_URL}/api/subjects/teacher/${teacherId}`);
+        const resSubjects = await apiFetch(`/api/subjects/teacher/${teacherId}`);
         const dataSubjects = await resSubjects.json();
         if (resSubjects.ok && dataSubjects.data) {
           setExistingSubjects(dataSubjects.data);
@@ -127,11 +128,10 @@ export default function CreateQuizPage() {
       if (matchedSubject) {
         finalSubjectId = matchedSubject.subject_id;
       } else {
-        const resNewSubj = await fetch(`${BACKEND_URL}/api/subjects`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subject_name: subjectInput.trim(), teacher_id: teacherId })
-        });
+        const resNewSubj = await apiFetch(`/api/subjects`, {
+  method: 'POST',
+  body: JSON.stringify({ subject_name: subjectInput.trim() })
+});
         const dataNewSubj = await resNewSubj.json();
         if (!resNewSubj.ok) throw new Error(dataNewSubj.message || "Gagal membuat mata pelajaran.");
         finalSubjectId = dataNewSubj.data.subject_id;
@@ -152,13 +152,10 @@ export default function CreateQuizPage() {
         }))
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/exams`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      const response = await apiFetch(`/api/exams`, {
+  method: 'POST',
+  body: JSON.stringify(payload),
+});
 
       const result = await response.json();
 
