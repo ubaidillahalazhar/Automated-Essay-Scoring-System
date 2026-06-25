@@ -319,14 +319,14 @@ function AnswerCard({
     if (!answer.score_id) return
     setSaving(true)
     try {
-      const res = await fetch(`${BACKEND_URL}/api/exams/score/${answer.score_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          final_score: parseFloat(scoreVal),
-          feedback: feedbackVal
+      const res = await apiFetch(`${BACKEND_URL}/api/exams/score/${answer.score_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            final_score: parseFloat(scoreVal),
+            feedback: feedbackVal
+          })
         })
-      })
       const json = await res.json()
       if (res.ok) {
         setEditing(false)
@@ -345,7 +345,7 @@ function AnswerCard({
     if (!answer.score_id) return
     setApproving(true)
     try {
-      const res = await fetch(`${BACKEND_URL}/api/exams/score/${answer.score_id}/approve`, {
+     const res = await apiFetch(`${BACKEND_URL}/api/exams/score/${answer.score_id}/approve`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" }
       })
