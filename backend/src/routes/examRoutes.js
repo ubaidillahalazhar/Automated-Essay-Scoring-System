@@ -7,7 +7,8 @@ const {
   getTeacherQuizzes, getAvailableQuizzes, getQuizQuestions,
   submitAnswers, getAttemptResult,
   getStudentAttempts, getTeacherAttempts,
-  updateScore, approveScore, approveAllInAttempt
+  updateScore, approveScore, approveAllInAttempt,
+  getQuizForEdit, updateQuizWithQuestions, deleteQuiz   
 } = require('../controllers/examController');
 
 // GURU
@@ -15,6 +16,10 @@ router.post('/', authenticateToken, isTeacher, createQuizWithQuestions);
 router.post('/question', authenticateToken, isTeacher, addQuestionWithKey);
 router.get('/teacher/:teacher_id', authenticateToken, isTeacher, getTeacherQuizzes);
 router.get('/teacher/:teacher_id/attempts', authenticateToken, isTeacher, getTeacherAttempts);
+
+router.get('/:quiz_id/edit', authenticateToken, isTeacher, getQuizForEdit);
+router.put('/:quiz_id', authenticateToken, isTeacher, updateQuizWithQuestions);
+router.delete('/:quiz_id', authenticateToken, isTeacher, deleteQuiz);
 
 // MURID
 router.get('/student/:student_id/available', authenticateToken, isStudent, getAvailableQuizzes);

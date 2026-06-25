@@ -30,7 +30,7 @@ from llama_cpp import Llama
 # ═══════════════════════════════════════════════════════════════════════
 load_dotenv()
 
-MODEL_PATH    = os.getenv("MODEL_PATH", "D:/Automated-Essay-Scoring-System/ai-service/models/qwen3-grader-q_4_km.gguf")
+MODEL_PATH    = os.getenv("MODEL_PATH", "D:/Automated-Essay-Scoring-System/ai-service/models/qwen3-grader-q_4_k_m.gguf")
 N_CTX         = int(os.getenv("N_CTX", "4096"))
 N_GPU_LAYERS  = int(os.getenv("N_GPU_LAYERS", "0"))      # 0 = CPU only
 N_THREADS     = int(os.getenv("N_THREADS", "0"))         # 0 = auto
