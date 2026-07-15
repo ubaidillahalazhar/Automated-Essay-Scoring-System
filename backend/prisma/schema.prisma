@@ -38,9 +38,6 @@ model UserDetail {
   user_id       Int       @unique
   email         String    @unique @db.VarChar(255)
   password_hash String    @db.VarChar(255)
-
-  otp_code       String?  @db.VarChar(10)     
-  otp_expires_at DateTime? @db.Timestamp(6)
   
   teaching_level String @default("SD")
   last_login    DateTime? @db.Timestamp(6)

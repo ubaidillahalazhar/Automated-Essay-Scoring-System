@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, isTeacher, isStudent } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { isTeacher, isStudent } = require('../middleware/roleMiddleware');
 
 const {
   createQuizWithQuestions, addQuestionWithKey,

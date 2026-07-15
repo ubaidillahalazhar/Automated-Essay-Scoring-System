@@ -1,4 +1,8 @@
 require('dotenv').config();
+if (!process.env.JWT_SECRET) {
+  console.error('FATAL: JWT_SECRET tidak di-set. Server berhenti demi keamanan.');
+  process.exit(1);
+}
 const express = require('express');
 const prisma = require('./config/prismaClient');
 const authRoutes = require('./routes/authRoutes');
@@ -7,6 +11,7 @@ const examRoutes = require('./routes/examRoutes');
 const gradeRoutes = require('./routes/gradeRoutes');
 const subjectRoutes = require('./routes/subjectRoutes');
 const app = express();
+const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 app.use(cors({
     origin: 'http://localhost:3000', // Izinkan frontend Anda
@@ -37,6 +42,9 @@ app.get('/api/test-users', async (req, res) => {
     res.status(500).json(resp);
   }
 });
+
+app.use(notFound);
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

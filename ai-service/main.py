@@ -266,13 +266,12 @@ def _normalize(data: dict) -> GradeResponse:
     # Jika model memberi skor 0-1
     if 0 <= skor <= 1:
         nilai_100 = skor * 100
-        skor = skor * 10
+        skor = skor * 100
 
     # Jika model memberi skor 0-10
     else:
         skor = max(0.0, min(10.0, skor))
         nilai_100 = skor * 10
-
     nilai_100 = max(0.0, min(100.0, nilai_100))
 
     alasan = str(data.get("alasan", "")).strip() or "Tidak ada alasan dari model."
