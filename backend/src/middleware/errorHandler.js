@@ -1,20 +1,8 @@
-// File: backend/src/middleware/errorHandler.js
-//
-// Penanganan error terpusat. Dengan ini, controller tidak perlu lagi menulis
-// try/catch + res.status(500) berulang-ulang. Cukup `throw` — Express 5
-// otomatis meneruskan error dari handler async ke middleware ini.
-//
-//   throw new AppError('Kuis tidak ditemukan', 404);
-//
-// Untuk error tak terduga (bukan AppError), status default 500 dan pesan
-// aslinya TIDAK dibocorkan ke client (hanya dicatat di log).
+
 
 const logger = require('../utils/loggerUtils');
 
-/**
- * Error operasional dengan HTTP status code.
- * Pakai ini untuk error yang "diharapkan" (validasi, not found, forbidden).
- */
+
 class AppError extends Error {
   constructor(message, statusCode = 500) {
     super(message);
