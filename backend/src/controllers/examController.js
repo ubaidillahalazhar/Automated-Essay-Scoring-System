@@ -43,6 +43,11 @@ const groupAnswersIntoAttempts = (answers) => {
 const createQuizWithQuestions = async (req, res) => {
   const { title, description, subject_id, timeLimit, grade_id, dueDate, questions } = req.body;
   const created_by = req.user.userId;
+
+  // Set due_date ke akhir hari (23:59:59.999) agar kuis tetap aktif sepanjang hari yang dipilih
+  const dueDateEnd = new Date(dueDate);
+  dueDateEnd.setHours(23, 59, 59, 999);
+
   const result = await prisma.$transaction(async (tx) => {
     const quiz = await tx.quiz.create({
       data: {
@@ -50,7 +55,7 @@ const createQuizWithQuestions = async (req, res) => {
         subject_id: parseInt(subject_id),
         time_limit: parseInt(timeLimit),
         grade_id: parseInt(grade_id),
-        due_date: new Date(dueDate),
+        due_date: dueDateEnd,
         created_by: parseInt(created_by)
       }
     });
@@ -735,6 +740,10 @@ const updateQuizWithQuestions = async (req, res) => {
     throw new AppError("Kuis harus memiliki minimal satu soal.", 400);
   }
 
+  // Set due_date ke akhir hari (23:59:59.999) agar kuis tetap aktif sepanjang hari yang dipilih
+  const dueDateEnd = new Date(dueDate);
+  dueDateEnd.setHours(23, 59, 59, 999);
+
   const result = await prisma.$transaction(async (tx) => {
     // 1. Update data inti kuis
     const updatedQuiz = await tx.quiz.update({
@@ -745,7 +754,7 @@ const updateQuizWithQuestions = async (req, res) => {
         subject_id: parseInt(subject_id),
         time_limit: parseInt(timeLimit),
         grade_id: parseInt(grade_id),
-        due_date: new Date(dueDate)
+        due_date: dueDateEnd
       }
     });
 

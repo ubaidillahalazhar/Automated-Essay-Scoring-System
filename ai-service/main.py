@@ -1,15 +1,3 @@
-"""
-FastAPI server untuk Grader AI.
-Setup     : CPU-only (atau GPU opsional), Qwen3 GGUF format
-Library   : llama-cpp-python (bukan transformers)
-Model     : Qwen3 GGUF Q4_K_M (~2.5GB RAM untuk 4B)
-Run       : python main.py   ATAU   uvicorn main:app --host 0.0.0.0 --port 8000
-Docs      : http://localhost:8000/docs
-
-Endpoint /grade dipanggil oleh backend/src/services/aiService.js
-Payload : {soal, kunci_jawaban, jawaban_siswa}
-Response: {skor, nilai_100, alasan}  -- HANYA 3 field sesuai aiService.js
-"""
 import json
 import logging
 import os
@@ -266,7 +254,7 @@ def _normalize(data: dict) -> GradeResponse:
     # Jika model memberi skor 0-1
     if 0 <= skor <= 1:
         nilai_100 = skor * 100
-        skor = skor * 100
+        skor = skor * 10
 
     # Jika model memberi skor 0-10
     else:

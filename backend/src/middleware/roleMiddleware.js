@@ -1,12 +1,3 @@
-// File: backend/src/middleware/roleMiddleware.js
-//
-// OTORISASI: memeriksa role user SETELAH token diverifikasi.
-// Middleware di sini mengandalkan req.user yang sudah diisi oleh
-// authenticateToken (authMiddleware). Karena itu, di setiap route selalu
-// pasang authenticateToken LEBIH DULU, baru pengecekan role.
-//
-//   router.post('/', authenticateToken, isTeacher, createQuiz);
-//                    ^-- autentikasi    ^-- otorisasi
 
 // role_id sesuai DB: 1=admin, 2=teacher, 3=student
 const ROLE = { ADMIN: 1, TEACHER: 2, STUDENT: 3 };
