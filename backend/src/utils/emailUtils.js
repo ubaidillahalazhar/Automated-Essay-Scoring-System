@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const logger = require('./loggerUtils');
 
 const sendOtpEmail = async (toEmail, otpCode) => {
   try {

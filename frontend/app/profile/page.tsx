@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { apiFetch } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import {
@@ -445,7 +446,7 @@ function StudentStatsView() {
 	useEffect(() => {
 		if (!user) return
 		const userId = user.id
-		fetch(`${BACKEND_URL}/api/exams/student/${userId}/attempts`)
+		apiFetch(`/api/exams/student/${userId}/attempts`)
 			.then(r => r.json())
 			.then(data => {
 				if (!data.data) return
@@ -553,8 +554,8 @@ function TeacherStatsView() {
 		const userId = user.id
 
 		Promise.all([
-			fetch(`${BACKEND_URL}/api/exams/teacher/${userId}`).then(r => r.json()),
-			fetch(`${BACKEND_URL}/api/exams/teacher/${userId}/attempts`).then(r => r.json())
+			apiFetch(`/api/exams/teacher/${userId}`).then(r => r.json()),
+			apiFetch(`/api/exams/teacher/${userId}/attempts`).then(r => r.json())
 		]).then(([quizzesRes, attemptsRes]) => {
 			const quizzes = quizzesRes.data || []
 			const attempts = attemptsRes.data || []
