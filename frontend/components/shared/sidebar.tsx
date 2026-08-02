@@ -42,13 +42,8 @@ export function Sidebar() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="px-5 py-5 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <BookOpen className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-primary">EduQuiz</span>
-        </div>
+      <div className="px-3 py-5 border-b border-border flex justify-center">
+          <img src="/logoKejarCita.png" alt="KejarCita" className="h-10 object-contain" />
       </div>
 
       {/* User info */}
@@ -117,11 +112,8 @@ export function Sidebar() {
 
       {/* Mobile header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-            <BookOpen className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span className="font-bold text-primary">EduQuiz</span>
+        <div className="flex-1 flex justify-center">
+          <img src="/logoKejarCita.png" alt="KejarCita" className="h-8 object-contain" />
         </div>
         <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 rounded-lg hover:bg-muted transition-colors">
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
