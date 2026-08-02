@@ -14,22 +14,19 @@ const app = express();
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 app.use(cors({
-    origin: 'http://localhost:3000', // Izinkan frontend Anda
+    origin: 'http://localhost:3000',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true // Diperlukan jika Anda pakai cookies/token/session
+    credentials: true 
 }));
 
-app.use(express.json()); // Agar bisa menerima format JSON
+app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
-app.use('/api/grades', gradeRoutes);     // <-- TAMBAH INI
+app.use('/api/grades', gradeRoutes);
 app.use('/api/subjects', subjectRoutes);
 
-
-// Endpoint untuk mengetes koneksi database
 app.get('/api/test-users', async (req, res) => {
   try {
-    // Memanggil tabel User menggunakan Prisma
     const users = await prisma.user.findMany();
     res.json({
       message: "Koneksi sukses!",

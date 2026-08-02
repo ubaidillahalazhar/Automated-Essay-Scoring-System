@@ -1,44 +1,48 @@
-// File: backend/src/controllers/scoringController.js
-//
-// Controller TIPIS + tanpa try/catch. Error dilempar via throw / AppError,
-// lalu ditangani oleh middleware errorHandler (Express 5 meneruskannya otomatis).
 
 const prisma = require('../config/prismaClient');
 const { gradeAndSaveScore } = require('../services/scoringService');
 const { AppError } = require('../middleware/errorHandler');
 
-/**
- * POST — Submit satu jawaban lalu langsung dinilai AI.
- * Body: { user_id, question_id, answer_text }
- */
+
 const submitAnswerAndGrade = async (req, res) => {
   const { user_id, question_id, answer_text } = req.body;
 
-  // 1. Ambil teks Soal + Kunci Jawaban dari Database
+
+  const userId = parseInt(user_id, 10);
+  const questionId = parseInt(question_id, 10);
+  if (!userId || !questionId) {
+    throw new AppError('user_id dan question_id wajib berupa angka yang valid.', 400);
+  }
+  if (typeof answer_text !== 'string' || !answer_text.trim()) {
+    throw new AppError('answer_text wajib diisi.', 400);
+  }
+
   const questionData = await prisma.essayQuestion.findUnique({
-    where: { question_id: question_id },
+    where: { question_id: questionId },
     include: { answerKey: true },
   });
 
-  if (!questionData || !questionData.answerKey) {
-    throw new AppError('Soal atau Kunci Jawaban tidak ditemukan', 404);
+
+  if (!questionData) {
+    throw new AppError('Soal tidak ditemukan.', 404);
   }
 
-  // 2. Simpan Jawaban Murid ke tabel StudentAnswer
+  if (!questionData.answerKey) {
+    throw new AppError('Data tidak konsisten: soal tidak memiliki kunci jawaban.', 500);
+  }
+
   const studentAnswer = await prisma.studentAnswer.create({
     data: {
-      user_id: user_id,
-      question_id: question_id,
+      user_id: userId,
+      question_id: questionId,
       answer_text: answer_text,
       word_count: answer_text.trim().split(/\s+/).filter(Boolean).length,
     },
   });
 
-  // 3. Serahkan penilaian + penyimpanan Score ke service
   const { score: finalScore } = await gradeAndSaveScore(studentAnswer, questionData);
 
-  // 4. Respons sukses
-  res.status(200).json({
+  res.status(201).json({
     message: 'Jawaban berhasil dikirim dan dinilai oleh AI',
     data: {
       answer: studentAnswer,
