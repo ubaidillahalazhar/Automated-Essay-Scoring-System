@@ -158,9 +158,8 @@ useEffect(() => {
     if (!user) return { success: false, message: "Belum login." };
 
     try {
-      const response = await fetch(`${BACKEND_URL}/api/auth/password/${user.id}`, {
+      const response = await apiFetch(`/api/auth/password/${user.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
       });
 
