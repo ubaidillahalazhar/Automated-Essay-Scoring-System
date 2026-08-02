@@ -4,7 +4,7 @@ const logger = require('../utils/loggerUtils');
 const AI_TIMEOUT_MS = parseInt(process.env.AI_TIMEOUT_MS || '90000', 10);
 
 const gradeEssayWithAI = async (soal, kunci_jawaban, jawaban_siswa) => {
-  const aiUrl = process.env.AI_GRADER_URL || 'http://localhost:8000/grade';
+  const aiUrl = process.env.AI_GRADER_URL || 'http://localhost:8010/grade';
 
   try {
     const response = await axios.post(
@@ -24,8 +24,8 @@ const gradeEssayWithAI = async (soal, kunci_jawaban, jawaban_siswa) => {
         `AI service mengembalikan format tidak valid: ${JSON.stringify(data)}`
       );
     }
-
     return data; // { skor, nilai_100, alasan }
+
   } catch (error) {
     if (error.code === 'ECONNABORTED') {
       logger.error(`AI Service timeout setelah ${AI_TIMEOUT_MS}ms`);
