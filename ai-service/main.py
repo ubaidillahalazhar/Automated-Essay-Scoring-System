@@ -18,7 +18,7 @@ from llama_cpp import Llama
 # ═══════════════════════════════════════════════════════════════════════
 load_dotenv()
 
-MODEL_PATH    = os.getenv("MODEL_PATH", "D:/Automated-Essay-Scoring-System/ai-service/models/qwen3-grader-q_4_k_m.gguf")
+MODEL_PATH    = os.getenv("MODEL_PATH", "D:/Automated-Essay-Scoring-System/ai-service/models/qwen3-grader-q4km.gguf")
 N_CTX         = int(os.getenv("N_CTX", "4096"))
 N_GPU_LAYERS  = int(os.getenv("N_GPU_LAYERS", "0"))      # 0 = CPU only
 N_THREADS     = int(os.getenv("N_THREADS", "0"))         # 0 = auto
@@ -29,10 +29,8 @@ HOST          = os.getenv("HOST", "0.0.0.0")
 PORT          = int(os.getenv("PORT", "8000"))
 
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",   # Next.js frontend
-    "http://localhost:5000",   # Express backend (jaga-jaga)
-    "http://localhost:5173",   # Vite (jaga-jaga)
-    # Tambahkan domain production di sini kalau perlu
+    "http://localhost:3000",  
+    "http://localhost:5000",  
 ]
 
 SYSTEM_PROMPT = """Anda adalah asisten penilai jawaban esai yang adil dan teliti dalam Bahasa Indonesia.
@@ -171,7 +169,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Grader AI API",
-    description="API untuk menilai jawaban esai siswa menggunakan Qwen3 GGUF (CPU-optimized).",
+    description="API untuk menilai jawaban esai siswa menggunakan Qwen3 GGUF.",
     version="2.0.0",
     lifespan=lifespan,
 )
