@@ -13,9 +13,7 @@ const ensureSelf = (req) => {
   return { ok: true, userId: paramId };
 };
 
-// ==========================================
 // 1. REGISTRASI
-// ==========================================
 const register = async (req, res) => {
   const { name, email, password, role, grade_id } = req.body;
   const role_id = role === "teacher" ? 2 : 3;
@@ -61,9 +59,7 @@ const register = async (req, res) => {
   });
 };
 
-// ==========================================
 // 2. VERIFIKASI OTP
-// ==========================================
 const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
 
@@ -112,9 +108,7 @@ const verifyOtp = async (req, res) => {
   res.status(200).json({ message: "Akun berhasil diverifikasi dan diaktifkan!" });
 };
 
-// ==========================================
 // 3. LOGIN
-// ==========================================
 const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -159,12 +153,7 @@ const login = async (req, res) => {
   });
 };
 
-// ==========================================
 // 4. GET PROFILE (BARU)
-// Endpoint: GET /api/auth/profile/:user_id
-//
-// Mengembalikan full info user untuk halaman profil.
-// ==========================================
 const getProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
@@ -196,13 +185,7 @@ const getProfile = async (req, res) => {
   });
 };
 
-// ==========================================
 // 5. UPDATE PROFILE (EXTEND)
-// Endpoint: PUT /api/auth/profile/:user_id
-//
-// Body bisa berisi: { name?, grade_id? }
-// Field opsional - hanya update yang dikirim.
-// ==========================================
 const updateProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
@@ -266,13 +249,7 @@ const updateProfile = async (req, res) => {
   });
 };
 
-// ==========================================
 // 6. CHANGE PASSWORD (BARU)
-// Endpoint: PUT /api/auth/password/:user_id
-//
-// Body: { old_password, new_password }
-// Verifikasi old_password dulu, lalu update.
-// ==========================================
 const changePassword = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);

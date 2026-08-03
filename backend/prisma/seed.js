@@ -4,7 +4,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Memulai proses seeding data...');
 
-  // Kita tentukan urutan ID dan nama Role secara mutlak
   const roles = [
     { role_id: 1, role_name: 'admin', description: 'Administrator Sistem' },
     { role_id: 2, role_name: 'teacher', description: 'Guru (Pembuat Kuis)' },
@@ -12,9 +11,6 @@ async function main() {
   ];
 
   for (const role of roles) {
-    // Kita gunakan upsert: 
-    // Jika role_name sudah ada, update datanya.
-    // Jika role_name belum ada, buat baru dengan ID yang kita tentukan.
     await prisma.role.upsert({
       where: { role_name: role.role_name },
       update: { 

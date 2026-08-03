@@ -19,8 +19,6 @@ const requireRole = (...allowedRoles) => (req, res, next) => {
     .json({ message: 'Akses ditolak! Anda tidak punya izin untuk aksi ini.' });
 };
 
-// Shortcut yang mempertahankan nama lama, supaya route tidak perlu diubah
-// selain sumber import-nya.
 const isTeacher = requireRole(ROLE.TEACHER);
 const isStudent = requireRole(ROLE.STUDENT);
 const isAdmin = requireRole(ROLE.ADMIN);

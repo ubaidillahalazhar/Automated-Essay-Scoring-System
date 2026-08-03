@@ -13,13 +13,6 @@ interface Grade {
   school_level: string
 }
 
-/**
- * Modal "Lengkapi Profil" — otomatis tampil kalau user adalah siswa
- * yang grade_id-nya null. Render-kan di layout siswa atau dashboard.
- *
- * Setelah siswa pilih kelas, user state auto-update (via updateProfile
- * di auth-context) sehingga modal otomatis hilang.
- */
 export function CompleteProfileModal() {
   const { user, updateProfile } = useAuth()
   const [grades, setGrades] = useState<Grade[]>([])
@@ -69,7 +62,6 @@ export function CompleteProfileModal() {
       setError(result.message)
       setSaving(false)
     }
-    // Kalau sukses, modal auto-hilang karena user.grade_id sudah ter-set
   }
 
   return (
