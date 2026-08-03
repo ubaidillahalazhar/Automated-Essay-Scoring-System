@@ -7,7 +7,6 @@ import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
 import "@/styles/login.css"
 
-// ─── Eye Icons ────────────────────────────────────────────────────────────────
 function EyeIcon() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
@@ -45,10 +44,6 @@ export default function LoginPage() {
         router.replace("/student/dashboard");
       } else if (user.role === "teacher") {
         router.replace("/teacher/dashboard");
-      } else if (user.role === "admin") {
-        // Jika belum ada dashboard admin, bisa diarahkan ke halaman lain, 
-        // tapi kita siapkan jalurnya dari sekarang.
-        router.replace("/admin/dashboard"); 
       }
     }
   }, [user, isLoading, router])
@@ -68,7 +63,6 @@ export default function LoginPage() {
   }
 }
 
-  // Show nothing while auth state is loading from storage
   if (isLoading) return null
 
   return (

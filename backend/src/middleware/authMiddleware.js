@@ -1,8 +1,3 @@
-// File: backend/src/middleware/authMiddleware.js
-//
-// AUTENTIKASI: memverifikasi JWT dan mengisi req.user.
-// Pengecekan role (otorisasi) ada di roleMiddleware.js.
-
 const jwt = require('jsonwebtoken');
 
 const authenticateToken = (req, res, next) => {
