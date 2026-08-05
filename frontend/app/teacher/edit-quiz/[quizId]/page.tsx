@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/shared/sidebar"
 import { type Question } from "@/lib/store"
 import { useToast } from "@/hooks/use-toast"
 import { Save, CheckCircle2 } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 interface GradeDB {
   grade_id: number
@@ -86,18 +87,11 @@ export default function EditQuizPage() {
     const fetchData = async () => {
       try {
         const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-        const token = localStorage.getItem("token")
-
         const [gradeRes, subjectRes, quizRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/grades`),
-          fetch(`${BACKEND_URL}/api/subjects/teacher/${user.id}`),
-          fetch(`${BACKEND_URL}/api/exams/${quizId}/edit`, {
-            headers: {
-              "Content-Type": "application/json",
-              ...(token ? { Authorization: `Bearer ${token}` } : {})
-            }
-          })
-        ])
+  apiFetch(`/api/grades`),
+  apiFetch(`/api/subjects/teacher/${user.id}`),
+  apiFetch(`/api/exams/${quizId}/edit`)
+])
 
         const gradeData = await gradeRes.json()
         const subjectData = await subjectRes.json()
@@ -187,7 +181,6 @@ export default function EditQuizPage() {
 
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
-      const token = localStorage.getItem("token")
 
       let finalSubjectId: number | null = null
       const matchedSubject = existingSubjects.find(
@@ -197,11 +190,10 @@ export default function EditQuizPage() {
       if (matchedSubject) {
         finalSubjectId = matchedSubject.subject_id
       } else {
-        const createSubjectRes = await fetch(`${BACKEND_URL}/api/subjects`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ subject_name: subjectInput.trim(), teacher_id: user?.id })
-        })
+        const createSubjectRes = await apiFetch(`/api/subjects`, {
+  method: "POST",
+  body: JSON.stringify({ subject_name: subjectInput.trim() })
+})
 
         const createdSubject = await createSubjectRes.json()
         if (!createSubjectRes.ok) {
@@ -226,14 +218,10 @@ export default function EditQuizPage() {
         }))
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/exams/${quizId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify(payload)
-      })
+      const response = await apiFetch(`/api/exams/${quizId}`, {
+  method: "PUT",
+  body: JSON.stringify(payload)
+})
 
       const result = await response.json()
 

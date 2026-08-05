@@ -1,41 +1,39 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, isTeacher } = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/authMiddleware');
+const { isTeacher, isStudent } = require('../middleware/roleMiddleware');
 
 const {
-  createQuizWithQuestions,
-  addQuestionWithKey,
-  getTeacherQuizzes,
-  getAvailableQuizzes,
-  getQuizQuestions,
-  submitAnswers,
-  getAttemptResult,
-  getStudentAttempts,
-  getTeacherAttempts,
-  deleteQuizById,
-  getTeacherQuizDetail,
-  updateQuizById
+  createQuizWithQuestions, addQuestionWithKey,
+  getTeacherQuizzes, getAvailableQuizzes, getQuizQuestions,
+  submitAnswers, getAttemptResult,
+  getStudentAttempts, getTeacherAttempts,
+  updateScore, approveScore, approveAllInAttempt,
+  getQuizForEdit, updateQuizWithQuestions, deleteQuiz   
 } = require('../controllers/examController');
 
-// ==========================================
-// RUTE UNTUK GURU
-// ==========================================
-router.post('/', createQuizWithQuestions);
-router.post('/question', addQuestionWithKey);
-router.get('/teacher/:teacher_id', getTeacherQuizzes);
-router.get('/teacher/:teacher_id/attempts', getTeacherAttempts); // BARU: list semua attempt siswa di quiz miliknya
-router.get('/:quiz_id/edit', authenticateToken, isTeacher, getTeacherQuizDetail);
-router.put('/:quiz_id', authenticateToken, isTeacher, updateQuizById);
-router.delete('/:quiz_id', authenticateToken, isTeacher, deleteQuizById);
+// GURU
+router.post('/', authenticateToken, isTeacher, createQuizWithQuestions);
+router.post('/question', authenticateToken, isTeacher, addQuestionWithKey);
+router.get('/teacher/:teacher_id', authenticateToken, isTeacher, getTeacherQuizzes);
+router.get('/teacher/:teacher_id/attempts', authenticateToken, isTeacher, getTeacherAttempts);
 
-// ==========================================
-// RUTE UNTUK MURID
-// ==========================================
-router.get('/student/:student_id/available', getAvailableQuizzes);
-router.get('/student/:student_id/attempts', getStudentAttempts); // BARU: list attempt miliknya sendiri
+router.get('/:quiz_id/edit', authenticateToken, isTeacher, getQuizForEdit);
+router.put('/:quiz_id', authenticateToken, isTeacher, updateQuizWithQuestions);
+router.delete('/:quiz_id', authenticateToken, isTeacher, deleteQuiz);
 
-router.get('/:quiz_id/start', getQuizQuestions);
-router.post('/:quiz_id/submit', submitAnswers);
-router.get('/attempt/:attempt_token', getAttemptResult);
+// MURID
+router.get('/student/:student_id/available', authenticateToken, isStudent, getAvailableQuizzes);
+router.get('/student/:student_id/attempts', authenticateToken, isStudent, getStudentAttempts);
+router.get('/:quiz_id/start', authenticateToken, isStudent, getQuizQuestions);
+router.post('/:quiz_id/submit', authenticateToken, isStudent, submitAnswers);
+
+// HASIL ATTEMPT
+router.get('/attempt/:attempt_token', authenticateToken, getAttemptResult);
+
+// APPROVAL (GURU)
+router.put('/score/:score_id', authenticateToken, isTeacher, updateScore);
+router.put('/score/:score_id/approve', authenticateToken, isTeacher, approveScore);
+router.put('/attempt/:attempt_token/approve-all', authenticateToken, isTeacher, approveAllInAttempt);
 
 module.exports = router;

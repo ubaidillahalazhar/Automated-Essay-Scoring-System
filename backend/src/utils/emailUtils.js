@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const logger = require('./loggerUtils');
 
 const sendOtpEmail = async (toEmail, otpCode) => {
   try {
@@ -18,9 +19,9 @@ const sendOtpEmail = async (toEmail, otpCode) => {
     };
 
     await transporter.sendMail(mailOptions);
-    console.log(`Email OTP berhasil dikirim ke ${toEmail}`);
+    logger.info(`Email OTP berhasil dikirim ke ${toEmail}`);
   } catch (error) {
-    console.error("Gagal mengirim email:", error);
+    logger.error("Gagal mengirim email:", error);
     throw new Error("Gagal mengirim email OTP");
   }
 };

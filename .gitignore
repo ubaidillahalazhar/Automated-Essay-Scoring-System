@@ -1,6 +1,63 @@
-node_modules
-# Keep environment variables out of version control
+# =========================================
+# SECRET & ENVIRONMENT  (paling penting)
+# =========================================
 .env
+.env*.local
+# Catatan: .env.example TIDAK di-ignore — sengaja, agar template
+# variabel bisa ikut ke repo. Pastikan isinya hanya nilai dummy.
 
-/generated/prisma
+# =========================================
+# DEPENDENCIES
+# =========================================
+node_modules/
+venv/
+aiAPI/
 
+# =========================================
+# PRISMA (client hasil generate)
+# =========================================
+**/generated/prisma/
+
+# =========================================
+# MODEL AI & ARTEFAK BESAR
+# =========================================
+ai-service/models/
+*.gguf
+*.tar
+*.tar.gz
+*.safetensors
+*.bin
+qwen3-grader-merged-8bit/
+
+# =========================================
+# ARTEFAK DOCKER / OCI
+# =========================================
+**/blobs/
+/oci-layout
+/index.json
+/manifest.json
+
+# =========================================
+# PYTHON
+# =========================================
+__pycache__/
+*.pyc
+
+# =========================================
+# NEXT.JS / FRONTEND
+# =========================================
+.next/
+.vercel/
+next.user-config.*
+
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+
+# =========================================
+# OS
+# =========================================
+.DS_Store
