@@ -190,10 +190,10 @@ const updateProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
   const userId = check.userId;
-  const { name, grade_id } = req.body;
+  const { name, grade_id, teaching_level} = req.body;
 
   // Validasi: minimal salah satu field harus ada
-  if (!name && !grade_id) {
+  if (!name && !grade_id && !teaching_level) {
     throw new AppError("Tidak ada perubahan yang dikirim.", 400);
   }
 
@@ -202,6 +202,11 @@ const updateProfile = async (req, res) => {
     const grade = await prisma.grade.findUnique({ where: { grade_id: parseInt(grade_id) } });
     if (!grade) throw new AppError("Grade tidak ditemukan.", 404);
   }
+
+  const ALLOWED_LEVELS = ["SD", "SMP", "SMA"];
+if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
+  throw new AppError("Jenjang mengajar tidak valid.", 400);
+}
 
   // Update User (name) dan UserDetail (grade_id) dalam transaksi
   const updated = await prisma.$transaction(async (tx) => {
@@ -214,10 +219,22 @@ const updateProfile = async (req, res) => {
     }
 
     // Update grade_id di UserDetail
-    if (grade_id) {
+    const detailData = {};
+    if (grade_id) detailData.grade_id = parseInt(grade_id);
+    if (teaching_level) detailData.teaching_level = teaching_level;
+
+    if (Object.keys(detailData).length > 0) {
       await tx.userDetail.update({
         where: { user_id: userId },
-        data: { grade_id: parseInt(grade_id) }
+        data: detailData
+      });
+    }
+
+    // Update teaching_level di UserDetail
+    if (teaching_level) {
+      await tx.userDetail.update({
+        where: { user_id: userId },
+        data: { teaching_level: teaching_level }
       });
     }
 

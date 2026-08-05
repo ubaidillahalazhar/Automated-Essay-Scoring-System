@@ -15,6 +15,7 @@ export interface User {
   grade_name?: string | null
   school_level?: string | null
   teaching_level?: string | null
+  created_at?: string | null
 }
 
 export interface Question {

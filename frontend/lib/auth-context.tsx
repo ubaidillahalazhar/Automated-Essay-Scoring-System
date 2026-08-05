@@ -30,6 +30,12 @@ interface AuthContextType {
   isLoading: boolean
 }
 
+interface UpdateProfilePayload {
+  name?: string
+  grade_id?: number
+  teaching_level?: string
+}
+
 const AuthContext = createContext<AuthContextType | null>(null)
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
