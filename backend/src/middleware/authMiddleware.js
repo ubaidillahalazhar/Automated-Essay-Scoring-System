@@ -1,40 +1,26 @@
 const jwt = require('jsonwebtoken');
 
 const authenticateToken = (req, res, next) => {
-  // 1. Ambil header 'Authorization' dari request
   const authHeader = req.headers['authorization'];
-  
-  // 2. Format token biasanya "Bearer eyJhbGciOi...", kita split untuk ambil tokennya saja
   const token = authHeader && authHeader.split(' ')[1];
 
-  // 3. Jika tidak ada token bawaan, usir (Status 401: Unauthorized)
   if (!token) {
-    return res.status(401).json({ message: "Akses ditolak! Tiket token tidak ditemukan." });
+    return res.status(401).json({ message: 'Akses ditolak! Token tidak ditemukan.' });
   }
 
-  // 4. Verifikasi keaslian token
+  const secretKey = process.env.JWT_SECRET;
+  if (!secretKey) {
+    console.error('FATAL: JWT_SECRET tidak di-set.');
+    return res.status(500).json({ message: 'Konfigurasi server bermasalah.' });
+  }
+
   try {
-    const secretKey = process.env.JWT_SECRET || 'RAHASIA_NEGARA'; // Pastikan sama dengan di authController
-    const decoded = jwt.verify(token, secretKey);
-    
-    // 5. Simpan data user (userId dan roleId) dari dalam token ke req.user
+    const decoded = jwt.verify(token, secretKey, { algorithms: ['HS256'] });
     req.user = decoded;
-    
-    // 6. Persilakan masuk ke controller selanjutnya
     next();
   } catch (error) {
-    // Jika token kadaluarsa atau palsu (Status 403: Forbidden)
-    return res.status(403).json({ message: "Tiket token tidak valid atau sudah kadaluarsa." });
+    return res.status(403).json({ message: 'Token tidak valid atau sudah kadaluarsa.' });
   }
 };
 
-// Opsional: Satpam khusus untuk mengecek apakah dia Guru (role_id: 1)
-const isTeacher = (req, res, next) => {
-  if (req.user && req.user.roleId === 2) {
-    next();
-  } else {
-    return res.status(403).json({ message: "Akses ditolak! Hanya Guru yang boleh melakukan aksi ini." });
-  }
-};
-
-module.exports = { authenticateToken, isTeacher };
+module.exports = { authenticateToken };

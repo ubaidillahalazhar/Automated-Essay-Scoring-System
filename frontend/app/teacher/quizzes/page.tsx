@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import { PlusSquare, FileText, Clock, Users, Trash2, Pencil } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 // 1. Buat tipe data (Interface) yang cocok dengan struktur Prisma Database
 interface QuizDB {
@@ -42,7 +43,7 @@ export default function TeacherQuizzes() {
       try {
         const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
         // Memanggil API dengan ID guru yang sedang login
-        const response = await fetch(`${BACKEND_URL}/api/exams/teacher/${user.id}`);
+        const response = await apiFetch(`/api/exams/teacher/${user.id}`);
 
         const result = await response.json();
 
@@ -68,15 +69,9 @@ export default function TeacherQuizzes() {
 
     try {
       const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(`${BACKEND_URL}/api/exams/${quizId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
+      const response = await apiFetch(`/api/exams/${quizId}`, {
+  method: "DELETE"
+});
 
       const result = await response.json();
 

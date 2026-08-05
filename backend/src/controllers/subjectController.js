@@ -3,9 +3,13 @@ const prisma = require('../config/prismaClient');
 // Mengambil mata pelajaran khusus milik guru yang sedang login
 const getTeacherSubjects = async (req, res) => {
   try {
-    const { teacher_id } = req.params;
+    const paramId = parseInt(req.params.teacher_id);
+    if (!paramId || req.user.userId !== paramId) {
+      return res.status(403).json({ message: "Anda hanya boleh akses data sendiri." });
+    }
+
     const subjects = await prisma.subject.findMany({
-      where: { teacher_id: parseInt(teacher_id) },
+      where: { teacher_id: paramId },
       orderBy: { subject_name: 'asc' }
     });
     res.status(200).json({ status: "success", data: subjects });
@@ -18,7 +22,8 @@ const getTeacherSubjects = async (req, res) => {
 // Menambahkan mata pelajaran baru ke database
 const createSubject = async (req, res) => {
   try {
-    const { subject_name, teacher_id } = req.body;
+    const { subject_name } = req.body;
+    const teacher_id = req.user.userId;
     
     // Cek apakah guru sudah pernah membuat mata pelajaran dengan nama yang sama persis
     const existingSubject = await prisma.subject.findFirst({

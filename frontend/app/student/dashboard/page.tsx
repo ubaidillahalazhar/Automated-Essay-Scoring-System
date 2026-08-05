@@ -10,6 +10,7 @@ import {
   CheckCircle2, ChevronRight, Target, Award
 } from "lucide-react"
 import { CompleteProfileModal } from "@/components/shared/CompleteProfileModal"
+import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -64,9 +65,9 @@ export default function StudentDashboard() {
       setFetching(true)
       try {
         const [quizzesRes, attemptsRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/exams/student/${userId}/available`),
-          fetch(`${BACKEND_URL}/api/exams/student/${userId}/attempts`)
-        ])
+        apiFetch(`/api/exams/student/${userId}/available`),
+        apiFetch(`/api/exams/student/${userId}/attempts`)
+      ])
         const quizzesJson = await quizzesRes.json()
         const attemptsJson = await attemptsRes.json()
 
