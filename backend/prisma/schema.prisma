@@ -19,6 +19,17 @@ model PendingUser {
   grade_id       Int?
 }
 
+model PasswordReset {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique @db.VarChar(255)
+  otp_code         String    @db.VarChar(10)
+  otp_expires_at   DateTime  @db.Timestamp(6)
+  attempts         Int       @default(0)
+  reset_token      String?   @db.VarChar(255)
+  token_expires_at DateTime? @db.Timestamp(6)
+  created_at       DateTime  @default(now()) @db.Timestamp(6)
+}
+
 model User {
   user_id     Int             @id @default(autoincrement())
   name        String          @db.VarChar(255)
@@ -41,6 +52,7 @@ model UserDetail {
   
   teaching_level String @default("SD")
   last_login    DateTime? @db.Timestamp(6)
+  password_changed_at DateTime? @db.Timestamp(6)
   is_active     Boolean   @default(true)
   created_at    DateTime  @default(now()) @db.Timestamp(6)
   updated_at    DateTime  @default(now()) @db.Timestamp(6)

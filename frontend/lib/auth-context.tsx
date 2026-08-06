@@ -129,11 +129,7 @@ useEffect(() => {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
-
-  /**
-   * Update profil. Bisa update name, grade_id, atau keduanya.
-   * Server hanya update field yang dikirim (PATCH-like).
-   */
+  
  async function updateProfile(payload: UpdateProfilePayload): Promise<{ success: boolean; message: string }> {
     if (!user) return { success: false, message: "Belum login." };
 
@@ -157,9 +153,6 @@ useEffect(() => {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
-  /**
-   * Ganti password. Backend akan verifikasi password lama dulu.
-   */
   async function changePassword(oldPassword: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     if (!user) return { success: false, message: "Belum login." };
 
@@ -175,15 +168,17 @@ useEffect(() => {
         return { success: false, message: data.message || "Gagal mengubah password." };
       }
 
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+        Cookies.set("token", data.token, { expires: 1 });
+      }
+
       return { success: true, message: "Password berhasil diubah!" };
     } catch (error) {
       return { success: false, message: "Terjadi kesalahan pada server backend." };
     }
   }
 
-  /**
-   * Re-fetch user profile dari backend (mis. setelah update di tempat lain).
-   */
   async function refreshProfile() {
     if (!user) return;
     try {

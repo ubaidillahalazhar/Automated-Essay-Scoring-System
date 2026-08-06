@@ -4,6 +4,7 @@ const { generateOtp, getOtpExpiry, isOtpExpired } = require('../utils/otpUtils')
 const { sendOtpEmail } = require('../utils/emailUtils');
 const { AppError } = require('../middleware/errorHandler');
 const jwt = require('jsonwebtoken');
+const { invalidateUserCache } = require('../middleware/authMiddleware');
 
 const ensureSelf = (req) => {
   const paramId = parseInt(req.params.user_id);
@@ -13,7 +14,6 @@ const ensureSelf = (req) => {
   return { ok: true, userId: paramId };
 };
 
-// 1. REGISTRASI
 const register = async (req, res) => {
   const { name, email, password, role, grade_id } = req.body;
   const role_id = role === "teacher" ? 2 : 3;
@@ -59,7 +59,6 @@ const register = async (req, res) => {
   });
 };
 
-// 2. VERIFIKASI OTP
 const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
 
@@ -108,7 +107,6 @@ const verifyOtp = async (req, res) => {
   res.status(200).json({ message: "Akun berhasil diverifikasi dan diaktifkan!" });
 };
 
-// 3. LOGIN
 const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -153,7 +151,6 @@ const login = async (req, res) => {
   });
 };
 
-// 4. GET PROFILE (BARU)
 const getProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
@@ -185,19 +182,16 @@ const getProfile = async (req, res) => {
   });
 };
 
-// 5. UPDATE PROFILE (EXTEND)
 const updateProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
   const userId = check.userId;
   const { name, grade_id, teaching_level} = req.body;
 
-  // Validasi: minimal salah satu field harus ada
   if (!name && !grade_id && !teaching_level) {
     throw new AppError("Tidak ada perubahan yang dikirim.", 400);
   }
 
-  // Validasi grade kalau dikirim
   if (grade_id) {
     const grade = await prisma.grade.findUnique({ where: { grade_id: parseInt(grade_id) } });
     if (!grade) throw new AppError("Grade tidak ditemukan.", 404);
@@ -208,9 +202,7 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
   throw new AppError("Jenjang mengajar tidak valid.", 400);
 }
 
-  // Update User (name) dan UserDetail (grade_id) dalam transaksi
   const updated = await prisma.$transaction(async (tx) => {
-    // Update nama di tabel User
     if (name) {
       await tx.user.update({
         where: { user_id: userId },
@@ -218,7 +210,6 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
       });
     }
 
-    // Update grade_id di UserDetail
     const detailData = {};
     if (grade_id) detailData.grade_id = parseInt(grade_id);
     if (teaching_level) detailData.teaching_level = teaching_level;
@@ -230,7 +221,6 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
       });
     }
 
-    // Update teaching_level di UserDetail
     if (teaching_level) {
       await tx.userDetail.update({
         where: { user_id: userId },
@@ -238,7 +228,6 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
       });
     }
 
-    // Ambil hasil terbaru
     return await tx.userDetail.findUnique({
       where: { user_id: userId },
       include: { grade: true, user: true }
@@ -266,7 +255,6 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
   });
 };
 
-// 6. CHANGE PASSWORD (BARU)
 const changePassword = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
@@ -284,24 +272,34 @@ const changePassword = async (req, res) => {
 
   if (!userDetail) throw new AppError("User tidak ditemukan.", 404);
 
-  // Verifikasi password lama
   const isMatch = await comparePassword(old_password, userDetail.password_hash);
   if (!isMatch) throw new AppError("Password lama salah.", 401);
 
-  // Cek password baru tidak sama dengan yang lama
   const isSame = await comparePassword(new_password, userDetail.password_hash);
   if (isSame) throw new AppError("Password baru tidak boleh sama dengan yang lama.", 400);
 
-  // Hash dan update
   const newHashed = await hashPassword(new_password);
   await prisma.userDetail.update({
     where: { user_id: userId },
-    data: { password_hash: newHashed }
+    data: {
+      password_hash: newHashed,
+      password_changed_at: new Date(),
+      updated_at: new Date()
+    }
   });
+
+  invalidateUserCache(userId);
+
+  const freshToken = jwt.sign(
+    { userId: userId, roleId: req.user.roleId },
+    process.env.JWT_SECRET,
+    { expiresIn: '1d' }
+  );
 
   res.status(200).json({
     status: "success",
-    message: "Password berhasil diubah!"
+    message: "Password berhasil diubah!",
+    token: freshToken
   });
 };
 
