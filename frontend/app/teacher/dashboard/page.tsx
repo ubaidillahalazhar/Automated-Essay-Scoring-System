@@ -11,6 +11,7 @@ import {
   MessageCircle, Search, Pencil, Trash2, Loader2, AlertTriangle, X, PlusSquare
 } from "lucide-react"
 import styles from "@/styles/teacher-dashboard.module.css"
+import { ChatbotWidget } from "@/components/shared/ChatbotWidget"
 import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -571,6 +572,8 @@ export default function TeacherDashboard() {
           )} */}
         </main>
       </div>
+
+      <ChatbotWidget />
 
       {deleteTarget && (
         <DeleteConfirmModal

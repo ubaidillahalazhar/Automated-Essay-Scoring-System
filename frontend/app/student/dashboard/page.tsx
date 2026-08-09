@@ -10,6 +10,7 @@ import {
   CheckCircle2, ChevronRight, Target, Award
 } from "lucide-react"
 import { CompleteProfileModal } from "@/components/shared/CompleteProfileModal"
+import { ChatbotWidget } from "@/components/shared/ChatbotWidget"
 import { apiFetch } from "@/lib/api"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -38,8 +39,10 @@ interface AttemptFromDB {
   quiz_id: number
   quiz_title: string
   subject_name: string
-  total_score: number
+  // null selama guru belum menyetujui hasil penilaian AI
+  total_score: number | null
   max_score: number
+  is_approved: boolean
   completed_at: string
 }
 
@@ -102,11 +105,21 @@ export default function StudentDashboard() {
   const recentAttempts = attempts.slice(0, 3)
 
   const totalCompleted = attempts.length
-  const avgScore = attempts.length
-    ? Math.round(attempts.reduce((s, a) => s + normalizeScore100(a.total_score), 0) / attempts.length)
+
+  // Backend mengirim total_score = null selama guru belum menyetujui hasil AI.
+  // Nilai null HARUS dikeluarkan dari perhitungan — kalau ikut dihitung,
+  // normalizeScore100(null) menghasilkan 0 dan rata-rata jadi turun tanpa sebab.
+  const scoredAttempts = attempts.filter(
+    (a): a is AttemptFromDB & { total_score: number } => a.total_score !== null
+  )
+  const avgScore = scoredAttempts.length
+    ? Math.round(
+        scoredAttempts.reduce((s, a) => s + normalizeScore100(a.total_score), 0) /
+          scoredAttempts.length
+      )
     : 0
-  const bestScore = attempts.length
-    ? Math.max(...attempts.map(a => Math.round(normalizeScore100(a.total_score))))
+  const bestScore = scoredAttempts.length
+    ? Math.max(...scoredAttempts.map(a => Math.round(normalizeScore100(a.total_score))))
     : 0
 
   return (
@@ -229,8 +242,10 @@ export default function StudentDashboard() {
                 </div>
                 <div className="space-y-2">
                   {recentAttempts.map((a) => {
-                    const pct = Math.round(normalizeScore100(a.total_score))
-                    const scoreClass = pct >= 80 ? "text-green-700 bg-green-50"
+                    const isPending = a.total_score === null
+                    const pct = Math.round(normalizeScore100(a.total_score ?? 0))
+                    const scoreClass = isPending ? "text-muted-foreground bg-muted"
+                      : pct >= 80 ? "text-green-700 bg-green-50"
                       : pct >= 60 ? "text-yellow-700 bg-yellow-50"
                       : "text-red-700 bg-red-50"
                     return (
@@ -249,7 +264,11 @@ export default function StudentDashboard() {
                             </p>
                           </div>
                           <div className={`text-center px-3 py-1.5 rounded-xl ${scoreClass} flex-shrink-0`}>
-                            <p className="text-xl font-bold leading-none">{pct}</p>
+                            {isPending ? (
+                              <p className="text-xs font-semibold leading-none">Menunggu</p>
+                            ) : (
+                              <p className="text-xl font-bold leading-none">{pct}</p>
+                            )}
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
                         </div>
@@ -262,6 +281,8 @@ export default function StudentDashboard() {
           </>
         )}
       </main>
+
+      <ChatbotWidget />
     </div>
   )
 }

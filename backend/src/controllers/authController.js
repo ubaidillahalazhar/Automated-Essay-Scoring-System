@@ -5,6 +5,8 @@ const { sendOtpEmail } = require('../utils/emailUtils');
 const { AppError } = require('../middleware/errorHandler');
 const jwt = require('jsonwebtoken');
 
+const normalizeEmail = (email) => (email || '').trim().toLowerCase();
+
 const ensureSelf = (req) => {
   const paramId = parseInt(req.params.user_id);
   if (!paramId || req.user.userId !== paramId) {
@@ -16,9 +18,10 @@ const ensureSelf = (req) => {
 // 1. REGISTRASI
 const register = async (req, res) => {
   const { name, email, password, role, grade_id } = req.body;
+  const normalizedEmail = normalizeEmail(email);
   const role_id = role === "teacher" ? 2 : 3;
 
-  const existingUser = await prisma.userDetail.findUnique({ where: { email } });
+  const existingUser = await prisma.userDetail.findUnique({ where: { email: normalizedEmail } });
   if (existingUser) {
     throw new AppError("Email sudah terdaftar dan aktif. Silakan login.", 400);
   }
@@ -28,7 +31,8 @@ const register = async (req, res) => {
   const otpExpiresAt = getOtpExpiry();
 
   const pendingData = {
-    email, name,
+    email: normalizedEmail,
+    name,
     password_hash: hashedPassword,
     role_id,
     otp_code: otpCode,
@@ -40,7 +44,7 @@ const register = async (req, res) => {
   }
 
   await prisma.pendingUser.upsert({
-    where: { email: email },
+    where: { email: normalizedEmail },
     update: {
       name: pendingData.name,
       password_hash: pendingData.password_hash,
@@ -52,7 +56,7 @@ const register = async (req, res) => {
     create: pendingData
   });
 
-  await sendOtpEmail(email, otpCode);
+  await sendOtpEmail(normalizedEmail, otpCode);
 
   res.status(201).json({
     message: "OTP berhasil dikirim ke email! Silakan cek inbox Anda."
@@ -62,8 +66,9 @@ const register = async (req, res) => {
 // 2. VERIFIKASI OTP
 const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  const pendingData = await prisma.pendingUser.findUnique({ where: { email } });
+  const pendingData = await prisma.pendingUser.findUnique({ where: { email: normalizedEmail } });
 
   if (!pendingData) throw new AppError("Data pendaftaran tidak ditemukan.", 404);
   if (pendingData.otp_code !== otp) throw new AppError("Kode OTP salah.", 401);
@@ -89,7 +94,7 @@ const verifyOtp = async (req, res) => {
         userDetail: { create: userDetailCreate }
       }
     }),
-    prisma.pendingUser.delete({ where: { email } })
+    prisma.pendingUser.delete({ where: { email: normalizedEmail } })
   ]);
 
   const userId = newUser.user_id;
@@ -111,9 +116,11 @@ const verifyOtp = async (req, res) => {
 // 3. LOGIN
 const login = async (req, res) => {
   const { email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPassword = String(password || '').trim();
 
   const userDetail = await prisma.userDetail.findUnique({
-    where: { email: email },
+    where: { email: normalizedEmail },
     include: { user: true, grade: true }
   });
 
@@ -121,7 +128,7 @@ const login = async (req, res) => {
     throw new AppError("Email belum terdaftar atau belum diverifikasi.", 404);
   }
 
-  const isMatch = await comparePassword(password, userDetail.password_hash);
+  const isMatch = await comparePassword(normalizedPassword, userDetail.password_hash);
   if (!isMatch) throw new AppError("Password salah.", 401);
 
   const roleId = userDetail.user.role_id;
