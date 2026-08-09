@@ -156,10 +156,7 @@ export default function LoginPage() {
 
             {/* Links */}
             <div className="login-links">
-              <button type="button" className="login-link-btn">Lupa kata sandi?</button>
-              <button type="button" className="login-link-btn">
-                Apakah Anda tidak menerima instruksi cara melakukan konfirmasi?
-              </button>
+              <Link href="/forgot-password" className="login-link-btn">Lupa kata sandi?</Link>
             </div>
 
           </form>
