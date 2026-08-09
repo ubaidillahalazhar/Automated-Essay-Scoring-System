@@ -5,11 +5,13 @@ if (!process.env.JWT_SECRET) {
 }
 const express = require('express');
 const prisma = require('./config/prismaClient');
+const logger = require('./utils/loggerUtils');
 const authRoutes = require('./routes/authRoutes');
 const cors = require('cors');
 const examRoutes = require('./routes/examRoutes');
 const gradeRoutes = require('./routes/gradeRoutes');
 const subjectRoutes = require('./routes/subjectRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 const app = express();
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -24,19 +26,17 @@ app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/grades', gradeRoutes);
 app.use('/api/subjects', subjectRoutes);
+app.use('/api/chat', chatRoutes);
 
-app.get('/api/test-users', async (req, res) => {
+// Health check. Menggantikan /api/test-users yang dulu mengembalikan
+// SELURUH tabel user tanpa autentikasi apa pun.
+app.get('/api/health', async (req, res) => {
   try {
-    const users = await prisma.user.findMany();
-    res.json({
-      message: "Koneksi sukses!",
-      data: users
-    });
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected' });
   } catch (error) {
-    console.error(error);
-    const resp = { error: "Gagal terhubung ke database" };
-    if (process.env.NODE_ENV !== 'production') resp.detail = error.message;
-    res.status(500).json(resp);
+    logger.error('Health check gagal:', error);
+    res.status(503).json({ status: 'error', database: 'disconnected' });
   }
 });
 
