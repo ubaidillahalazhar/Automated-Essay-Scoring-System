@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { apiFetch } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
@@ -50,13 +50,20 @@ interface TeacherStats {
 }
 
 export default function ProfilePage() {
-	const { user, isLoading, logout } = useAuth()
+	const { user, isLoading, logout, refreshProfile } = useAuth()
 	const router = useRouter()
 	const [activeTab, setActiveTab] = useState<TabId>("profile")
+	const hasRefreshed = useRef(false)
 
 	useEffect(() => {
 		if (!isLoading && !user) router.replace("/login")
 	}, [user, isLoading, router])
+
+	useEffect(() => {
+		if (isLoading || !user || hasRefreshed.current) return
+		hasRefreshed.current = true
+		refreshProfile()
+	}, [isLoading, user, refreshProfile])
 
 	if (isLoading || !user) {
 		return (
@@ -159,11 +166,21 @@ function ProfileTab() {
 					/>
 				)}
 
-				{user.role === "teacher" && user.teaching_level && (
+				{user.role === "teacher" && (
 					<InfoRow
 						icon={<GraduationCap className="w-4 h-4" />}
 						label="Jenjang Mengajar"
-						value={user.teaching_level}
+						value={user.teaching_level || "Belum diatur"}
+					/>
+				)}
+
+				{user.created_at && (
+					<InfoRow
+						icon={<Calendar className="w-4 h-4" />}
+						label="Bergabung Sejak"
+						value={new Date(user.created_at).toLocaleDateString("id-ID", {
+							day: "numeric", month: "long", year: "numeric"
+						})}
 					/>
 				)}
 			</div>
@@ -192,9 +209,11 @@ function EditProfileTab() {
 	const { user, updateProfile } = useAuth()
 	const [editingName, setEditingName] = useState(false)
 	const [editingGrade, setEditingGrade] = useState(false)
+	const [editingTeaching, setEditingTeaching] = useState(false)
 	const [nameValue, setNameValue] = useState(user?.name || "")
 	const [gradeId, setGradeId] = useState<number | null>(user?.grade_id || null)
 	const [schoolLevel, setSchoolLevel] = useState<string>(user?.school_level || "SD")
+	const [teachingLevel, setTeachingLevel] = useState<string>(user?.teaching_level || "SD")
 	const [grades, setGrades] = useState<Grade[]>([])
 	const [loadingGrades, setLoadingGrades] = useState(false)
 	const [saving, setSaving] = useState(false)
@@ -205,6 +224,7 @@ function EditProfileTab() {
 			setNameValue(user.name)
 			setGradeId(user.grade_id || null)
 			setSchoolLevel(user.school_level || "SD")
+			setTeachingLevel(user.teaching_level || "SD")
 		}
 	}, [user])
 
@@ -257,6 +277,29 @@ function EditProfileTab() {
 		} else {
 			setMessage({ type: "error", text: result.message })
 		}
+	}
+
+	async function handleSaveTeachingLevel() {
+		if (teachingLevel === user!.teaching_level) {
+			setEditingTeaching(false)
+			return
+		}
+		setSaving(true)
+		setMessage(null)
+		const result = await updateProfile({ teaching_level: teachingLevel } as any)
+		setSaving(false)
+		if (result.success) {
+			setMessage({ type: "success", text: result.message })
+			setEditingTeaching(false)
+		} else {
+			setMessage({ type: "error", text: result.message })
+		}
+	}
+
+	function handleCancelTeaching() {
+		setTeachingLevel(user!.teaching_level || "SD")
+		setEditingTeaching(false)
+		setMessage(null)
 	}
 
 	function handleCancelName() {
@@ -411,6 +454,63 @@ function EditProfileTab() {
 					</div>
 				)}
 
+				{user.role === "teacher" && (
+					<div>
+						<label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+							Jenjang Mengajar
+						</label>
+						{editingTeaching ? (
+							<div className="space-y-3">
+								<div className="flex gap-2">
+									{(["SD", "SMP", "SMA"] as const).map(lvl => (
+										<button
+											key={lvl}
+											type="button"
+											onClick={() => setTeachingLevel(lvl)}
+											className={`flex-1 py-2 rounded-xl text-sm font-medium transition ${
+												teachingLevel === lvl
+													? "bg-primary text-primary-foreground"
+													: "bg-muted text-foreground hover:bg-muted/70"
+											}`}
+										>
+											{lvl}
+										</button>
+									))}
+								</div>
+								<div className="flex gap-2">
+									<button
+										onClick={handleSaveTeachingLevel}
+										disabled={saving}
+										className="flex-1 px-3 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1.5"
+									>
+										{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+										Simpan
+									</button>
+									<button
+										onClick={handleCancelTeaching}
+										disabled={saving}
+										className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted"
+									>
+										Batal
+									</button>
+								</div>
+							</div>
+						) : (
+							<div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-muted/30">
+								<span className="text-sm font-semibold text-foreground">
+									{user.teaching_level || "Belum diatur"}
+								</span>
+								<button
+									onClick={() => setEditingTeaching(true)}
+									className="text-xs font-semibold text-primary hover:text-primary/80 flex items-center gap-1"
+								>
+									<Pencil className="w-3 h-3" /> Edit
+								</button>
+							</div>
+						)}
+					</div>
+				)}
+
 				{/* Email (tidak bisa diedit) */}
 				<div>
 					<label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
@@ -450,7 +550,9 @@ function StudentStatsView() {
 			.then(r => r.json())
 			.then(data => {
 				if (!data.data) return
-				const attempts = data.data
+				const attempts = (data.data as any[]).filter(
+					a => a.is_approved && typeof a.total_score === "number"
+				)
 				const scores = attempts.map((a: any) => a.total_score)
 				const avg = scores.length ? Math.round(scores.reduce((s: number, v: number) => s + v, 0) / scores.length) : 0
 				const best = scores.length ? Math.max(...scores) : 0
@@ -560,6 +662,7 @@ function TeacherStatsView() {
 			const quizzes = quizzesRes.data || []
 			const attempts = attemptsRes.data || []
 			const uniqueStudents = new Set(attempts.map((a: any) => a.student_id)).size
+			const scored = attempts.filter((a: any) => typeof a.total_score === "number")
 			const avg = attempts.length
 				? Math.round(attempts.reduce((s: number, a: any) => s + a.total_score, 0) / attempts.length)
 				: 0
