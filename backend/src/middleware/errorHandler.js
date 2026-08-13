@@ -41,6 +41,7 @@ const errorHandler = (err, req, res, next) => {
   const clientMessage = isServerError ? 'Terjadi kesalahan pada server.' : err.message;
 
   const body = { status: 'error', message: clientMessage };
+  if (!isServerError && err.code) body.code = err.code;
 
   // Di non-production, sertakan detail asli untuk mempermudah debugging.
   if (process.env.NODE_ENV !== 'production' && isServerError) {

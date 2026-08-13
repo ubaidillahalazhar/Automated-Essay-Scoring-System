@@ -847,6 +847,7 @@ const deleteQuiz = async (req, res) => {
 };
 
 module.exports = {
+  groupAnswersIntoAttempts,
   createQuizWithQuestions,
   addQuestionWithKey,
   getTeacherQuizzes,
