@@ -12,9 +12,22 @@ interface UpdateProfilePayload {
   grade_id?: number
 }
 
+interface LoginCaptcha {
+  token: string
+  answer: string | number[]
+}
+
+interface LoginResult {
+  success: boolean
+  message: string
+  /** 'CAPTCHA_INVALID' → halaman login harus memuat ulang kode keamanan */
+  code?: string
+}
+
 interface AuthContextType {
   user: User | null
-  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>
+  login: (email: string, password: string, captcha?: LoginCaptcha) => Promise<LoginResult>
+  
   signup: (
     name: string,
     email: string,
@@ -64,19 +77,26 @@ useEffect(() => {
 }, [router])
 
 
-  async function login(email: string, password: string): Promise<{ success: boolean; message: string }> {
+  async function login(email: string, password: string, captcha?: LoginCaptcha): Promise<LoginResult> {
     try {
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({
+          email,
+          password,
+          captcha_token: captcha?.token,
+          captcha_answer: captcha?.answer
+        })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        return { success: false, message: data.message || "Login gagal." };
+        return { success: false, message: data.message || "Login gagal.", code: data.code };
       }
+
+      // ...sisanya (data.token, setUser, dst) tidak berubah
 
       if (data.token) {
         localStorage.setItem("token", data.token);

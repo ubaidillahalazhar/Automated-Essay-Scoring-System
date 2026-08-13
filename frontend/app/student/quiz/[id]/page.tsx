@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useCallback, use } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef, use } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import {
   Clock, ChevronLeft, ChevronRight, AlertTriangle, BookOpen,
-  Loader2, AlertCircle, CheckCircle2, Sparkles
+  Loader2, AlertCircle, CheckCircle2, Sparkles, TimerReset, Send
 } from "lucide-react"
 import { apiFetch } from "@/lib/api"
 
@@ -48,6 +48,16 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const [timeLeft, setTimeLeft] = useState(0)
   const [started, setStarted] = useState(false)
   const [startTime, setStartTime] = useState<number>(0)
+  const [deadline, setDeadline] = useState<number>(0)
+  const [resumed, setResumed] = useState(false)
+
+  // ─── State peringatan waktu ───
+  const [activeWarning, setActiveWarning] = useState<number | null>(null)
+  const [autoSubmitted, setAutoSubmitted] = useState(false)
+  const firedWarnings = useRef<Set<number>>(new Set())
+
+  // Kunci penyimpanan sesi: menjaga sisa waktu & jawaban kalau halaman ter-refresh
+  const sessionKey = `aes:quiz-session:${id}`
 
   // ─── State submission ───
   const [submitted, setSubmitted] = useState(false)
@@ -58,6 +68,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   // ─── State validasi quiz ───
   const [isOverdue, setIsOverdue] = useState(false)
   const [alreadyDone, setAlreadyDone] = useState(false)
+  const [doneChecked, setDoneChecked] = useState(false)
 
   // Redirect kalau bukan siswa
   useEffect(() => {
@@ -119,11 +130,60 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
         }
       } catch (err) {
         // ignore
+      } finally {
+        if (!cancelled) setDoneChecked(true)
       }
     }
     checkIfDone()
     return () => { cancelled = true }
   }, [user, quiz])
+
+  // ─── Pencatat aktivitas (dipakai laporan guru) ───
+  // Sengaja fire-and-forget: kegagalan pencatatan tidak boleh mengganggu ujian.
+  const logActivity = useCallback((event_type: string, metadata?: Record<string, unknown>) => {
+    if (!quiz) return
+    apiFetch(`/api/exams/${quiz.quiz_id}/activity`, {
+      method: "POST",
+      body: JSON.stringify({ event_type, metadata }),
+      keepalive: true
+    }).catch(() => { /* abaikan */ })
+  }, [quiz])
+
+  // ─── Mulai kuis ───
+  const startQuiz = useCallback(() => {
+    if (!quiz) return
+    const now = Date.now()
+    const end = now + (quiz.time_limit || 30) * 60 * 1000
+    setStartTime(now)
+    setDeadline(end)
+    setStarted(true)
+    try {
+      localStorage.setItem(sessionKey, JSON.stringify({ startTime: now, deadline: end, answers: {} }))
+    } catch { /* storage penuh / mode privat: kuis tetap jalan */ }
+    logActivity("quiz_started", { time_limit: quiz.time_limit })
+  }, [quiz, sessionKey, logActivity])
+
+  // ─── Lanjutkan sesi yang belum selesai (misalnya halaman ter-refresh) ───
+  useEffect(() => {
+    if (!quiz || started || alreadyDone || isOverdue || !doneChecked) return
+    let saved: any
+    try {
+      const raw = localStorage.getItem(sessionKey)
+      if (!raw) return
+      saved = JSON.parse(raw)
+    } catch {
+      localStorage.removeItem(sessionKey)
+      return
+    }
+    if (!saved?.deadline) return
+
+    setAnswers(saved.answers || {})
+    setStartTime(saved.startTime || Date.now())
+    setDeadline(saved.deadline)
+    setStarted(true)
+    setResumed(true)
+    logActivity("quiz_resumed", { remaining_seconds: Math.max(0, Math.round((saved.deadline - Date.now()) / 1000)) })
+  }, [quiz, started, alreadyDone, isOverdue, doneChecked, sessionKey, logActivity])
 
   // ─── Submit handler ───
   const submitQuiz = useCallback(async () => {
@@ -150,13 +210,13 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
       const response = await apiFetch(
-  `/api/exams/${quiz.quiz_id}/submit`,
-  {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    signal: controller.signal
-  }
-)
+        `/api/exams/${quiz.quiz_id}/submit`,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }
+      )
 
       clearTimeout(timeoutId)
       const result = await response.json()
@@ -171,6 +231,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       }
 
       setSubmitted(true)
+      try { localStorage.removeItem(sessionKey) } catch { /* abaikan */ }
       router.push(`/student/results/${attemptToken}`)
     } catch (err: any) {
       console.error("❌ Submit gagal:", err)
@@ -180,19 +241,78 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       setSubmitError(msg)
       setSubmitting(false)
     }
-  }, [quiz, user, answers, submitted, submitting, startTime, router])
+  }, [quiz, user, answers, submitted, submitting, startTime, router, sessionKey])
 
-  // Timer countdown
+  // ─── Timer ───
+  // Dihitung dari deadline, bukan dari pengurangan per detik, supaya sisa waktu
+  // tetap benar walaupun tab di-background (browser memperlambat setInterval)
+  // atau halaman di-refresh di tengah pengerjaan.
+  useEffect(() => {
+    if (!started || !deadline || submitted || submitting) return
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      setTimeLeft(remaining)
+      if (remaining === 0) {
+        setActiveWarning(null)
+        setAutoSubmitted(true)
+        logActivity("auto_submitted", { reason: "time_up" })
+        submitQuiz()
+      }
+    }
+
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [started, deadline, submitted, submitting, submitQuiz, logActivity])
+
+  // ─── Titik peringatan waktu ───
+  // Default 5 menit & 1 menit terakhir. Kalau durasi kuis lebih pendek dari
+  // ambang tersebut, ambang itu otomatis dilewati supaya tidak muncul langsung
+  // begitu kuis dimulai.
+  const warningPoints = useMemo(() => {
+    const totalSeconds = (quiz?.time_limit || 30) * 60
+    return [300, 60].filter((point) => point < totalSeconds)
+  }, [quiz])
+
+  useEffect(() => {
+    if (!started || submitted || submitting || timeLeft <= 0) return
+
+    const due = warningPoints.find(
+      (point) => timeLeft <= point && !firedWarnings.current.has(point)
+    )
+    if (due === undefined) return
+
+    // Tandai semua ambang di atas titik ini supaya popup tidak beruntun
+    warningPoints.forEach((point) => { if (point >= due) firedWarnings.current.add(point) })
+
+    setActiveWarning(due)
+    logActivity("time_warning_shown", { remaining_seconds: due })
+  }, [timeLeft, started, submitted, submitting, warningPoints, logActivity])
+
+  // ─── Simpan jawaban & sisa waktu ke localStorage ───
+  useEffect(() => {
+    if (!started || submitted || submitting || !deadline) return
+    try {
+      localStorage.setItem(sessionKey, JSON.stringify({ startTime, deadline, answers }))
+    } catch { /* abaikan */ }
+  }, [answers, started, submitted, submitting, deadline, startTime, sessionKey])
+
+  // ─── Cegah keluar halaman tanpa sengaja ───
   useEffect(() => {
     if (!started || submitted || submitting) return
-    const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) { clearInterval(interval); submitQuiz(); return 0 }
-        return t - 1
-      })
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [started, submitted, submitting, submitQuiz])
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = "" }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [started, submitted, submitting])
+
+  // ─── Catat saat siswa berpindah tab (muncul di laporan guru) ───
+  useEffect(() => {
+    if (!started || submitted || submitting) return
+    const handler = () => logActivity(document.hidden ? "tab_hidden" : "tab_visible")
+    document.addEventListener("visibilitychange", handler)
+    return () => document.removeEventListener("visibilitychange", handler)
+  }, [started, submitted, submitting, logActivity])
 
   // ─────────────────────────────────────────────────────────────────
   // RENDER STATES
@@ -286,7 +406,8 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
   const progress = ((currentQ + 1) / totalQuestions) * 100
   const mins = Math.floor(timeLeft / 60)
   const secs = timeLeft % 60
-  const timeWarning = timeLeft < 120
+  const timeWarning = timeLeft <= 300
+  const timeCritical = timeLeft <= 60
   const currentQuestion = quiz.questions[currentQ]
 
   // ── State: AI sedang menilai ──
@@ -298,6 +419,11 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             <div className="absolute inset-0 bg-primary/10 rounded-2xl animate-pulse" />
             <Sparkles className="w-8 h-8 text-primary absolute inset-0 m-auto" />
           </div>
+          {autoSubmitted && (
+            <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
+              Waktu habis. Jawabanmu dikumpulkan otomatis.
+            </div>
+          )}
           <h2 className="text-xl font-bold text-foreground mb-2">
             AI sedang menilai jawabanmu...
           </h2>
@@ -371,7 +497,9 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
                 <AlertTriangle className="w-3.5 h-3.5" /> Sebelum memulai
               </p>
               <ul className="text-xs text-amber-800 space-y-0.5 ml-5 list-disc">
-                <li>Setelah kamu mulai, waktu akan terus berjalan</li>
+                <li>Setelah kamu mulai, waktu akan terus berjalan walau halaman ditutup</li>
+                <li>Ada peringatan saat sisa waktu 5 menit dan 1 menit</li>
+                <li>Waktu habis: jawaban yang sudah ditulis dikumpulkan otomatis</li>
                 <li>Jawaban akan otomatis dinilai oleh AI setelah kamu kumpulkan</li>
                 <li>Kamu tidak bisa mengerjakan kuis ini dua kali</li>
               </ul>
@@ -384,10 +512,7 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             )}
 
             <button
-              onClick={() => {
-                setStarted(true)
-                setStartTime(Date.now())
-              }}
+              onClick={startQuiz}
               className="w-full bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary/90 transition"
             >
               Mulai Kuis
@@ -415,9 +540,17 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
             Soal {currentQ + 1} dari {totalQuestions} · {answeredCount} terjawab
           </p>
         </div>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-sm ${
-          timeWarning ? "bg-red-50 text-red-600 animate-pulse" : "bg-primary/10 text-primary"
-        }`}>
+        <div
+          role="timer"
+          aria-live={timeCritical ? "assertive" : "off"}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl font-bold text-sm tabular-nums ${
+            timeCritical
+              ? "bg-red-600 text-white animate-pulse"
+              : timeWarning
+              ? "bg-red-50 text-red-600"
+              : "bg-primary/10 text-primary"
+          }`}
+        >
           <Clock className="w-4 h-4" />
           {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
         </div>
@@ -427,6 +560,42 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
       <div className="h-1 bg-muted">
         <div className="h-full bg-primary transition-all" style={{ width: `${progress}%` }} />
       </div>
+
+      {/* Catatan sesi dilanjutkan setelah halaman ter-refresh */}
+      {resumed && !timeWarning && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 lg:px-8 py-2 flex items-center gap-2 text-sm text-blue-900">
+          <TimerReset className="w-4 h-4 flex-none" />
+          Pengerjaanmu dilanjutkan. Waktu tetap berjalan sejak kuis dimulai.
+        </div>
+      )}
+
+      {/* Banner waktu menipis */}
+      {timeWarning && timeLeft > 0 && (
+        <div
+          className={`px-4 lg:px-8 py-2 flex items-center justify-between gap-3 text-sm border-b ${
+            timeCritical
+              ? "bg-red-600 border-red-700 text-white"
+              : "bg-amber-50 border-amber-200 text-amber-900"
+          }`}
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 flex-none" />
+            <span className="truncate">
+              Sisa waktu {mins} menit {String(secs).padStart(2, "0")} detik. Kumpulkan sebelum waktu habis.
+            </span>
+          </span>
+          <button
+            onClick={() => setShowConfirm(true)}
+            className={`flex-none px-3 py-1.5 rounded-lg font-semibold text-xs transition ${
+              timeCritical
+                ? "bg-white text-red-700 hover:bg-red-50"
+                : "bg-amber-600 text-white hover:bg-amber-700"
+            }`}
+          >
+            Kumpulkan sekarang
+          </button>
+        </div>
+      )}
 
       {/* Question area */}
       <div className="flex-1 px-4 lg:px-8 py-6 max-w-3xl w-full mx-auto">
@@ -510,6 +679,59 @@ export default function QuizPage({ params }: { params: Promise<{ id: string }> }
           </div>
         </div>
       </div>
+
+      {/* Popup peringatan waktu (5 menit & 1 menit terakhir) */}
+      {activeWarning !== null && !showConfirm && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="time-warning-title"
+        >
+          <div className="bg-white rounded-2xl border border-border p-6 max-w-sm w-full text-center">
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
+              activeWarning <= 60 ? "bg-red-100" : "bg-amber-100"
+            }`}>
+              <Clock className={`w-7 h-7 ${activeWarning <= 60 ? "text-red-600" : "text-amber-600"}`} />
+            </div>
+
+            <h3 id="time-warning-title" className="text-lg font-bold text-foreground mb-2">
+              {activeWarning <= 60 ? "Tinggal 1 menit lagi!" : "Waktu tinggal 5 menit"}
+            </h3>
+
+            <p className="text-sm text-muted-foreground mb-1">
+              Kamu sudah menjawab <strong>{answeredCount}</strong> dari <strong>{totalQuestions}</strong> soal.
+              {answeredCount < totalQuestions && (
+                <span className="block mt-1 text-amber-700">
+                  Ada {totalQuestions - answeredCount} soal yang belum dijawab.
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground mb-5">
+              Kalau waktu habis, jawaban yang sudah kamu tulis dikumpulkan otomatis.
+            </p>
+
+            <div className="text-2xl font-bold text-foreground mb-5 tabular-nums">
+              {String(mins).padStart(2, "0")}:{String(secs).padStart(2, "0")}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveWarning(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border bg-white text-foreground font-medium text-sm hover:bg-muted/40 transition"
+              >
+                Lanjut mengerjakan
+              </button>
+              <button
+                onClick={() => { setActiveWarning(null); setShowConfirm(true) }}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-green-600 text-white font-medium text-sm hover:bg-green-700 transition flex items-center justify-center gap-1.5"
+              >
+                <Send className="w-4 h-4" /> Kumpulkan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal konfirmasi submit */}
       {showConfirm && (
