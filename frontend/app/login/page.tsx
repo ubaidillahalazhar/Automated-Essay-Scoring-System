@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { useAuth } from "@/lib/auth-context"
+import CaptchaField, { type CaptchaFieldHandle, type CaptchaAnswer } from "@/components/shared/CaptchaField"
 import "@/styles/login.css"
 
 function EyeIcon() {
@@ -37,6 +38,12 @@ export default function LoginPage() {
   const [error, setError]               = useState("")
   const [submitting, setSubmitting]     = useState(false)
 
+  // ── CAPTCHA ──
+  const [captchaToken, setCaptchaToken]   = useState("")
+  const [captchaAnswer, setCaptchaAnswer] = useState<CaptchaAnswer>("")
+  const [captchaOn, setCaptchaOn]         = useState(true)
+  const captchaRef = useRef<CaptchaFieldHandle>(null)
+
   // ── Auto-redirect if already logged in (e.g. stored session) ─────────────
   useEffect(() => {
     if (!isLoading && user) {
@@ -48,20 +55,36 @@ export default function LoginPage() {
     }
   }, [user, isLoading, router])
 
-  // ── Handle form submit ────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  setError("");
-  setSubmitting(true);
+    e.preventDefault();
+    setError("");
 
-  const result = await login(email, password);
+    // Komponen captcha yang menentukan jawabannya:
+    // teks/gambar → isian user, reCAPTCHA → token segar dari Google.
+    let captchaPayload: { token: string; answer: CaptchaAnswer } | undefined
 
-  if (!result.success) {
-    setError(result.message);
-    setSubmitting(false);
-    return;
+    if (captchaOn) {
+      const resolved = await captchaRef.current?.resolveAnswer()
+      if (!resolved?.ok) {
+        setError(resolved?.message || "Selesaikan dulu verifikasi keamanannya.");
+        return;
+      }
+      captchaPayload = { token: captchaToken, answer: resolved.answer! }
+    }
+
+    setSubmitting(true);
+
+    const result = await login(email, password, captchaPayload);
+
+    if (!result.success) {
+      setError(result.message);
+      // Setiap soal hanya bisa dipakai sekali, jadi ambil soal baru
+      // setelah percobaan gagal apa pun penyebabnya.
+      captchaRef.current?.reload();
+      setSubmitting(false);
+      return;
+    }
   }
-}
 
   if (isLoading) return null
 
@@ -124,6 +147,16 @@ export default function LoginPage() {
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
+
+            {/* Kode keamanan */}
+            <CaptchaField
+              ref={captchaRef}
+              value={captchaAnswer}
+              onValueChange={setCaptchaAnswer}
+              onTokenChange={setCaptchaToken}
+              onEnabledChange={setCaptchaOn}
+              disabled={submitting}
+            />
 
             {/* Remember me */}
             <label className="login-remember">
