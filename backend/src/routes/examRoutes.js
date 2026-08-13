@@ -9,14 +9,19 @@ const {
   submitAnswers, getAttemptResult,
   getStudentAttempts, getTeacherAttempts,
   updateScore, approveScore, approveAllInAttempt,
-  getQuizForEdit, updateQuizWithQuestions, deleteQuiz   
+  getQuizForEdit, updateQuizWithQuestions, deleteQuiz
 } = require('../controllers/examController');
+
+const {
+  logQuizActivity, getActivityReport
+} = require('../controllers/activityController');
 
 // GURU
 router.post('/', authenticateToken, isTeacher, createQuizWithQuestions);
 router.post('/question', authenticateToken, isTeacher, addQuestionWithKey);
 router.get('/teacher/:teacher_id', authenticateToken, isTeacher, getTeacherQuizzes);
 router.get('/teacher/:teacher_id/attempts', authenticateToken, isTeacher, getTeacherAttempts);
+router.get('/teacher/:teacher_id/activity', authenticateToken, isTeacher, getActivityReport);
 
 router.get('/:quiz_id/edit', authenticateToken, isTeacher, getQuizForEdit);
 router.put('/:quiz_id', authenticateToken, isTeacher, updateQuizWithQuestions);
@@ -27,6 +32,7 @@ router.get('/student/:student_id/available', authenticateToken, isStudent, getAv
 router.get('/student/:student_id/attempts', authenticateToken, isStudent, getStudentAttempts);
 router.get('/:quiz_id/start', authenticateToken, isStudent, getQuizQuestions);
 router.post('/:quiz_id/submit', authenticateToken, isStudent, submitAnswers);
+router.post('/:quiz_id/activity', authenticateToken, isStudent, logQuizActivity);
 
 // HASIL ATTEMPT
 router.get('/attempt/:attempt_token', authenticateToken, getAttemptResult);

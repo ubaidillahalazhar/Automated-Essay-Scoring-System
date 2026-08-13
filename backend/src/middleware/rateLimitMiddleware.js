@@ -73,8 +73,38 @@ const verifyResetOtpByIp = createRateLimiter({
   message: 'Terlalu banyak percobaan verifikasi. Coba lagi nanti.'
 });
 
+const loginByEmail = createRateLimiter({
+  windowMs: FIFTEEN_MINUTES,
+  max: 10,
+  label: 'login/email',
+  keyFn: (req) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    return email ? `login:email:${email}` : null;
+  },
+  message: 'Terlalu banyak percobaan login untuk akun ini. Coba lagi dalam 15 menit.'
+});
+
+const loginByIp = createRateLimiter({
+  windowMs: FIFTEEN_MINUTES,
+  max: 40,
+  label: 'login/ip',
+  keyFn: (req) => `login:ip:${req.ip}`,
+  message: 'Terlalu banyak percobaan login dari jaringan ini. Coba lagi nanti.'
+});
+
+const captchaByIp = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 60,
+  label: 'captcha/ip',
+  keyFn: (req) => `captcha:ip:${req.ip}`,
+  message: 'Terlalu banyak permintaan kode keamanan. Tunggu sebentar.'
+});
+
 module.exports = {
   createRateLimiter,
+  loginByEmail,
+  loginByIp,
+  captchaByIp,
   forgotPasswordByEmail,
   forgotPasswordByIp,
   verifyResetOtpByIp

@@ -39,6 +39,7 @@ model User {
   quizzes     Quiz[]
   scoresGiven Score[]         @relation("ScoredBy")
   answers     StudentAnswer[]
+  activityLogs QuizActivityLog[]
   role        Role            @relation(fields: [role_id], references: [role_id])
   userDetail  UserDetail?
   subjects    Subject[]
@@ -116,6 +117,9 @@ model Quiz {
 
   // Relasi ke pertanyaan
   questions    EssayQuestion[]
+
+   // Relasi ke log aktivitas siswa (untuk laporan monitoring guru)
+  activityLogs QuizActivityLog[]
 }
 
 model EssayQuestion {
@@ -168,4 +172,28 @@ model Score {
   teacher     User?          @relation("ScoredBy", fields: [scored_by], references: [user_id])
   is_approved  Boolean   @default(false)
   approved_at  DateTime?        
+}
+
+// ==========================================
+// C. LOG AKTIVITAS PENGERJAAN KUIS
+// Dipakai halaman "Laporan Aktivitas" milik guru:
+// siapa sedang mengerjakan, kapan mulai, berapa kali pindah tab,
+// dan apakah pengumpulan dilakukan manual atau otomatis saat waktu habis.
+// ==========================================
+model QuizActivityLog {
+  log_id     Int      @id @default(autoincrement())
+  user_id    Int
+  quiz_id    Int
+  event_type String   @db.VarChar(50)
+  // quiz_started | quiz_resumed | time_warning_shown | tab_hidden |
+  // tab_visible  | submitted    | auto_submitted
+  metadata   Json?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  student User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  quiz    Quiz @relation(fields: [quiz_id], references: [quiz_id], onDelete: Cascade)
+
+  @@index([quiz_id, created_at])
+  @@index([user_id, created_at])
+  @@index([event_type])
 }

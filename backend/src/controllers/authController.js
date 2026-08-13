@@ -5,7 +5,7 @@ const { sendOtpEmail } = require('../utils/emailUtils');
 const { AppError } = require('../middleware/errorHandler');
 const jwt = require('jsonwebtoken');
 const { invalidateUserCache } = require('../middleware/authMiddleware');
-
+const { issueCaptcha, issuePassToken, verifyCaptcha, isCaptchaEnabled, resolveImagePath } = require('../utils/captchaUtils');
 const normalizeEmail = (email) => (email || '').trim().toLowerCase();
 
 const ensureSelf = (req) => {
@@ -112,13 +112,63 @@ const verifyOtp = async (req, res) => {
   res.status(200).json({ message: "Akun berhasil diverifikasi dan diaktifkan!" });
 };
 
+// ==========================================
+// CAPTCHA: kirim soal + token ke halaman login
+// GET /api/auth/captcha
+// ==========================================
+const getCaptcha = async (req, res) => {
+  if (!isCaptchaEnabled()) {
+    return res.status(200).json({ status: "success", enabled: false });
+  }
+  const captcha = issueCaptcha();
+  res.set('Cache-Control', 'no-store');
+  res.status(200).json({ status: "success", enabled: true, ...captcha });
+};
+
+// ==========================================
+// CAPTCHA: sajikan satu gambar berdasarkan id bersegel
+// GET /api/auth/captcha/image/:id
+// ==========================================
+const getCaptchaImage = async (req, res) => {
+  const filePath = resolveImagePath(req.params.id);
+  if (!filePath) throw new AppError('Gambar tidak ditemukan.', 404);
+
+  res.set('Cache-Control', 'private, max-age=300');
+  res.sendFile(filePath);
+};
+
+// ==========================================
+// CAPTCHA: periksa jawaban soal, terbitkan tiket lulus
+// POST /api/auth/captcha/verify   Body: { token, answer }
+// ==========================================
+const verifyCaptchaChallenge = async (req, res) => {
+  const { token, answer } = req.body;
+
+  const result = await verifyCaptcha(token, answer, req.ip);
+  if (!result.ok) {
+    const err = new AppError(result.message, 400);
+    err.code = 'CAPTCHA_INVALID';
+    throw err;
+  }
+
+  res.status(200).json({ status: "success", pass_token: issuePassToken() });
+};
+
 const login = async (req, res) => {
-  const { email, password } = req.body;
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedPassword = String(password || '').trim();
+  const { email, password, captcha_token, captcha_answer } = req.body;
+
+  // Verifikasi CAPTCHA sebelum menyentuh database sama sekali.
+  if (isCaptchaEnabled()) {
+    const captcha = await verifyCaptcha(captcha_token, captcha_answer, req.ip);
+    if (!captcha.ok) {
+      const err = new AppError(captcha.message, 400);
+      err.code = 'CAPTCHA_INVALID';   // dipakai frontend untuk auto-refresh soal
+      throw err;
+    }
+  }
 
   const userDetail = await prisma.userDetail.findUnique({
-    where: { email: normalizedEmail },
+    where: { email: email },
     include: { user: true, grade: true }
   });
 
@@ -126,7 +176,7 @@ const login = async (req, res) => {
     throw new AppError("Email belum terdaftar atau belum diverifikasi.", 404);
   }
 
-  const isMatch = await comparePassword(normalizedPassword, userDetail.password_hash);
+  const isMatch = await comparePassword(password, userDetail.password_hash);
   if (!isMatch) throw new AppError("Password salah.", 401);
 
   const roleId = userDetail.user.role_id;
@@ -141,6 +191,12 @@ const login = async (req, res) => {
     process.env.JWT_SECRET,
     { expiresIn: '1d' }
   );
+
+  // Dipakai laporan "Aktivitas Siswa" untuk menandai siswa yang belum pernah masuk.
+  await prisma.userDetail.update({
+    where: { user_id: userDetail.user_id },
+    data: { last_login: new Date() }
+  }).catch(() => { /* jangan gagalkan login hanya karena pencatatan */ });
 
   res.status(200).json({
     message: "Login sukses!",
@@ -193,7 +249,7 @@ const updateProfile = async (req, res) => {
   const check = ensureSelf(req);
   if (!check.ok) throw new AppError(check.message, check.status);
   const userId = check.userId;
-  const { name, grade_id, teaching_level} = req.body;
+  const { name, grade_id, teaching_level } = req.body;
 
   if (!name && !grade_id && !teaching_level) {
     throw new AppError("Tidak ada perubahan yang dikirim.", 400);
@@ -205,9 +261,9 @@ const updateProfile = async (req, res) => {
   }
 
   const ALLOWED_LEVELS = ["SD", "SMP", "SMA"];
-if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
-  throw new AppError("Jenjang mengajar tidak valid.", 400);
-}
+  if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
+    throw new AppError("Jenjang mengajar tidak valid.", 400);
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     if (name) {
@@ -225,13 +281,6 @@ if (teaching_level && !ALLOWED_LEVELS.includes(teaching_level)) {
       await tx.userDetail.update({
         where: { user_id: userId },
         data: detailData
-      });
-    }
-
-    if (teaching_level) {
-      await tx.userDetail.update({
-        where: { user_id: userId },
-        data: { teaching_level: teaching_level }
       });
     }
 
@@ -311,6 +360,9 @@ const changePassword = async (req, res) => {
 };
 
 module.exports = {
+  getCaptcha,
+  getCaptchaImage,
+  verifyCaptchaChallenge,
   login,
   register,
   verifyOtp,
