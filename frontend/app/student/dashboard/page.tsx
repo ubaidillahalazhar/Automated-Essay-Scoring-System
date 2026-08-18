@@ -122,6 +122,24 @@ export default function StudentDashboard() {
     ? Math.max(...scoredAttempts.map(a => Math.round(normalizeScore100(a.total_score))))
     : 0
 
+  // Performa per mata pelajaran
+  const subjectStatsMap = new Map<string, { total: number; count: number }>()
+  for (const a of scoredAttempts) {
+    const subj = a.subject_name || "Lainnya"
+    const existing = subjectStatsMap.get(subj) || { total: 0, count: 0 }
+    subjectStatsMap.set(subj, {
+      total: existing.total + normalizeScore100(a.total_score),
+      count: existing.count + 1
+    })
+  }
+  const subjectStats = Array.from(subjectStatsMap.entries())
+    .map(([subject_name, val]) => ({
+      subject_name,
+      avgScore: Math.round(val.total / val.count),
+      count: val.count
+    }))
+    .sort((a, b) => b.avgScore - a.avgScore)
+
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -169,6 +187,36 @@ export default function StudentDashboard() {
                 <p className="text-xs text-muted-foreground">Nilai Tertinggi</p>
               </div>
             </div>
+
+            {/* Performa per mata pelajaran */}
+            {subjectStats.length > 0 && (
+              <div className="bg-white rounded-2xl border border-border p-5 mb-6">
+                <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-primary" /> Performa per Mata Pelajaran
+                </h3>
+                <div className="space-y-3">
+                  {subjectStats.map((s) => (
+                    <div key={s.subject_name}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-semibold text-foreground">{s.subject_name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {s.count} kuis · rata-rata {s.avgScore}
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            s.avgScore >= 80 ? "bg-green-500" :
+                            s.avgScore >= 60 ? "bg-yellow-500" : "bg-red-500"
+                          }`}
+                          style={{ width: `${s.avgScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Pending quizzes */}
             <section className="mb-6">

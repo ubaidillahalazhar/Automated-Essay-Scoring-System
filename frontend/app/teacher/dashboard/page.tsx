@@ -8,7 +8,8 @@ import { Sidebar } from "@/components/shared/sidebar"
 import { useToast } from "@/hooks/use-toast"
 import {
   ChevronRight, BarChart2, CheckCircle2, Heart,
-  MessageCircle, Search, Pencil, Trash2, Loader2, AlertTriangle, X, PlusSquare
+  MessageCircle, Search, Pencil, Trash2, Loader2, AlertTriangle, X, PlusSquare,
+  BookOpen, Users as UsersIcon, Target, TrendingUp, AlertCircle
 } from "lucide-react"
 import styles from "@/styles/teacher-dashboard.module.css"
 import { ChatbotWidget } from "@/components/shared/ChatbotWidget"
@@ -37,6 +38,18 @@ interface GradeDB {
   grade_id: number
   grade_name: string
   school_level: string
+}
+
+interface AttemptDB {
+  student_id: number
+  total_score: number | null
+}
+
+interface TeacherStats {
+  totalQuizzes: number
+  totalAttempts: number
+  uniqueStudents: number
+  avgClassScore: number
 }
 
 const SUBJECT_COLORS: Record<string, { from: string; to: string; label: string; syms: string[] }> = {
@@ -181,6 +194,18 @@ function QuizCard({
   )
 }
 
+function StatCard({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
+  return (
+    <div className="bg-white rounded-2xl border border-border p-4">
+      <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
+        {icon}
+      </div>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  )
+}
+
 function EmptyState({ message }: { message: string }) {
   return (
     <div className={styles.empty}>
@@ -263,6 +288,7 @@ export default function TeacherDashboard() {
   const [quizzes, setQuizzes] = useState<QuizDB[]>([])
   const [subjects, setSubjects] = useState<SubjectDB[]>([])
   const [grades, setGrades] = useState<GradeDB[]>([])
+  const [attempts, setAttempts] = useState<AttemptDB[]>([])
   const [fetching, setFetching] = useState(true)
 
   const [activeSubjectId, setActiveSubjectId] = useState<"all" | number>("all")
@@ -302,20 +328,23 @@ export default function TeacherDashboard() {
     async function loadData() {
       setFetching(true)
       try {
-        const [quizzesRes, subjectsRes, gradesRes] = await Promise.all([
+        const [quizzesRes, subjectsRes, gradesRes, attemptsRes] = await Promise.all([
   apiFetch(`/api/exams/teacher/${userId}`),
   apiFetch(`/api/subjects/teacher/${userId}`),
   apiFetch(`/api/grades`),
+  apiFetch(`/api/exams/teacher/${userId}/attempts`),
 ])
         const quizzesJson = await quizzesRes.json()
         const subjectsJson = await subjectsRes.json()
         const gradesJson = await gradesRes.json()
+        const attemptsJson = await attemptsRes.json()
 
         if (cancelled) return
 
         if (quizzesRes.ok) setQuizzes(quizzesJson.data || [])
         if (subjectsRes.ok) setSubjects(subjectsJson.data || [])
         if (gradesRes.ok) setGrades(gradesJson.data || [])
+        if (attemptsRes.ok) setAttempts(attemptsJson.data || [])
       } catch (err) {
         console.error("Gagal memuat data dashboard:", err)
       } finally {
@@ -326,6 +355,21 @@ export default function TeacherDashboard() {
     loadData()
     return () => { cancelled = true }
   }, [user])
+
+  const stats: TeacherStats = useMemo(() => {
+    const uniqueStudents = new Set(attempts.map((a) => a.student_id)).size
+    const scored = attempts.filter((a) => typeof a.total_score === "number")
+    const avgClassScore = scored.length
+      ? Math.round(scored.reduce((s, a) => s + (a.total_score as number), 0) / scored.length)
+      : 0
+
+    return {
+      totalQuizzes: quizzes.length,
+      totalAttempts: attempts.length,
+      uniqueStudents,
+      avgClassScore
+    }
+  }, [quizzes, attempts])
 
   const filteredSubjects = useMemo(() => {
     if (!searchSubject.trim()) return subjects
@@ -435,6 +479,31 @@ export default function TeacherDashboard() {
               Buat Kuis
             </Link>
           </div>
+
+          {/* Statistik */}
+          {!fetching && (
+            <div className="mb-6 mt-2">
+              <h2 className="text-lg font-bold text-foreground mb-3">Statistik</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={<BookOpen className="w-5 h-5 text-primary" />} value={stats.totalQuizzes} label="Total Kuis Dibuat" />
+                <StatCard icon={<UsersIcon className="w-5 h-5 text-blue-600" />} value={stats.uniqueStudents} label="Siswa Unik" />
+                <StatCard icon={<Target className="w-5 h-5 text-amber-600" />} value={stats.totalAttempts} label="Total Pengerjaan" />
+                <StatCard icon={<TrendingUp className="w-5 h-5 text-green-600" />} value={stats.avgClassScore} label="Rata-rata Kelas" />
+              </div>
+
+              {stats.totalAttempts === 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3 mt-4">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">Belum ada siswa yang mengerjakan</p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      Statistik akan terisi setelah siswa mulai mengumpulkan kuis Anda.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Search input di kiri (gantikan posisi lama tombol Buat Kuis) */}
           <div style={{ marginTop: 8, marginBottom: 16, maxWidth: 320 }}>
