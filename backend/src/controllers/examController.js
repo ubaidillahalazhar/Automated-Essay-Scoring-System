@@ -106,7 +106,7 @@ const getTeacherQuizzes = async (req, res) => {
     where: { created_by: check.userId },
     include: {
       _count: { select: { questions: true } },
-      grade: { select: { grade_name: true, school_level: true } },
+      grade: { select: { grade_id: true, grade_name: true, school_level: true } },
       subject: { select: { subject_id: true, subject_name: true } }
     },
     orderBy: { created_at: 'desc' }
@@ -115,7 +115,7 @@ const getTeacherQuizzes = async (req, res) => {
 };
 
 // ==========================================
-// 4. AVAILABLE QUIZZES (siswa, by school_level)
+// 4. AVAILABLE QUIZZES (siswa, hanya untuk kelasnya sendiri)
 // ==========================================
 const getAvailableQuizzes = async (req, res) => {
   const check = ensureOwn(req, 'student_id');
@@ -132,14 +132,9 @@ const getAvailableQuizzes = async (req, res) => {
   }
 
   const schoolLevel = studentDetail.grade.school_level;
-  const gradesInSameLevel = await prisma.grade.findMany({
-    where: { school_level: schoolLevel },
-    select: { grade_id: true }
-  });
-  const gradeIds = gradesInSameLevel.map(g => g.grade_id);
 
   const quizzes = await prisma.quiz.findMany({
-    where: { grade_id: { in: gradeIds } },
+    where: { grade_id: studentDetail.grade_id },
     include: {
       teacher: { select: { name: true } },
       subject: { select: { subject_name: true } },
@@ -444,6 +439,13 @@ const getStudentAttempts = async (req, res) => {
     const scores = group.map(a => a.score).filter(Boolean);
     const isFullyApproved = scores.length > 0 && scores.every(s => s.is_approved);
 
+    // Tanggal approval = saat skor terakhir dalam attempt ini disetujui guru
+    // (baru di titik itu nilainya benar-benar terlihat oleh siswa).
+    const approvedDates = scores.map(s => s.approved_at).filter(Boolean);
+    const approvedAt = isFullyApproved && approvedDates.length > 0
+      ? new Date(Math.max(...approvedDates.map(d => d.getTime()))).toISOString()
+      : null;
+
     return {
       attempt_token: attemptToken,
       quiz_id: quiz.quiz_id,
@@ -455,7 +457,8 @@ const getStudentAttempts = async (req, res) => {
       total_score: isFullyApproved ? Math.round(totalScore * 100) / 100 : null,
       max_score: 100,
       is_approved: isFullyApproved,
-      completed_at: earliest.toISOString()
+      completed_at: earliest.toISOString(),
+      approved_at: approvedAt
     };
   });
 
@@ -546,6 +549,106 @@ const getTeacherAttempts = async (req, res) => {
 
   attempts.sort((a, b) => b.completed_at.localeCompare(a.completed_at));
   res.status(200).json({ status: "success", data: attempts, quizzes: myQuizzes });
+};
+
+// ==========================================
+// 9b. TEACHER STUDENTS OVERVIEW (siswa unik, rekap per mata pelajaran)
+// Endpoint: GET /api/exams/teacher/:teacher_id/students
+// ==========================================
+const getTeacherStudentsOverview = async (req, res) => {
+  const check = ensureOwn(req, 'teacher_id');
+  if (!check.ok) throw new AppError(check.message, check.status);
+  const teacherId = check.userId;
+
+  const myQuizzes = await prisma.quiz.findMany({
+    where: { created_by: teacherId },
+    select: {
+      quiz_id: true, grade_id: true, subject_id: true,
+      subject: { select: { subject_name: true } },
+      _count: { select: { questions: true } }
+    }
+  });
+  if (myQuizzes.length === 0) return res.status(200).json({ status: "success", data: [] });
+
+  const gradeIds = [...new Set(myQuizzes.map(q => q.grade_id).filter(Boolean))];
+  const studentDetails = await prisma.userDetail.findMany({
+    where: { grade_id: { in: gradeIds }, user: { role_id: 3 } },
+    select: {
+      user_id: true, grade_id: true,
+      grade: { select: { grade_name: true } },
+      user: { select: { name: true } }
+    }
+  });
+
+  const quizIds = myQuizzes.map(q => q.quiz_id);
+  const answers = await prisma.studentAnswer.findMany({
+    where: { question: { quiz_id: { in: quizIds } } },
+    select: {
+      question: { select: { quiz_id: true } },
+      user_id: true,
+      score: { select: { final_score: true } }
+    }
+  });
+
+  const answersByStudent = new Map();
+  for (const a of answers) {
+    const list = answersByStudent.get(a.user_id) || [];
+    list.push({
+      quiz_id: a.question.quiz_id,
+      score: a.score?.final_score ? Number(a.score.final_score) : 0
+    });
+    answersByStudent.set(a.user_id, list);
+  }
+
+  const students = studentDetails.map(detail => {
+    const assignedQuizzes = myQuizzes.filter(q => q.grade_id === detail.grade_id);
+
+    const subjectMap = new Map();
+    for (const q of assignedQuizzes) {
+      const entry = subjectMap.get(q.subject_id) || {
+        subject_name: q.subject?.subject_name || "-",
+        total_questions: 0,
+        quiz_ids: new Set()
+      };
+      entry.total_questions += q._count.questions;
+      entry.quiz_ids.add(q.quiz_id);
+      subjectMap.set(q.subject_id, entry);
+    }
+
+    const myAnswers = answersByStudent.get(detail.user_id) || [];
+
+    const subjects = Array.from(subjectMap.values())
+      .map(entry => {
+        const subjectAnswers = myAnswers.filter(a => entry.quiz_ids.has(a.quiz_id));
+        const completed_questions = subjectAnswers.length;
+        const pending_questions = Math.max(0, entry.total_questions - completed_questions);
+        const avg_score = completed_questions > 0
+          ? Math.round(subjectAnswers.reduce((s, a) => s + a.score, 0) / completed_questions)
+          : null;
+
+        return {
+          subject_name: entry.subject_name,
+          completed_questions,
+          pending_questions,
+          avg_score
+        };
+      })
+      .sort((a, b) => a.subject_name.localeCompare(b.subject_name));
+
+    return {
+      student_id: detail.user_id,
+      student_name: detail.user?.name || "Siswa",
+      class_name: detail.grade?.grade_name || "-",
+      subjects
+    };
+  });
+
+  students.sort((a, b) =>
+    a.class_name.localeCompare(b.class_name, 'id', { numeric: true }) ||
+    a.student_name.localeCompare(b.student_name)
+  );
+
+  res.status(200).json({ status: "success", data: students });
 };
 
 // ==========================================
@@ -857,6 +960,7 @@ module.exports = {
   getAttemptResult,
   getStudentAttempts,
   getTeacherAttempts,
+  getTeacherStudentsOverview,
   updateScore,
   approveScore,
   approveAllInAttempt,

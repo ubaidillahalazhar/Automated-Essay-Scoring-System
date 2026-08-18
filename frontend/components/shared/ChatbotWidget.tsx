@@ -21,6 +21,27 @@ interface Provider {
 // tambahkan tabel ChatSession/ChatMessage di Prisma dan simpan di backend.
 const MAX_HISTORY_SENT = 12
 
+const BUTTON_SIZE = 56 // px — cocok dengan w-14 h-14
+const PANEL_WIDTH = 380
+const PANEL_HEIGHT = 540
+const PANEL_MARGIN = 16
+// Kiri, sedikit di atas tombol "Keluar" di footer sidebar desktop.
+// Posisi ini SENGAJA tidak disimpan lintas sesi — tiap kali dashboard dibuka,
+// bubble selalu mulai dari sini lagi, walau sempat digeser sebelumnya.
+const DEFAULT_POS = { left: 20, bottom: 120 }
+const DRAG_THRESHOLD = 6 // px pointer harus bergerak dulu sebelum dianggap drag, bukan klik
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function clampToViewport(p: { left: number; bottom: number }) {
+  if (typeof window === "undefined") return p
+  const maxLeft = Math.max(0, window.innerWidth - BUTTON_SIZE)
+  const maxBottom = Math.max(0, window.innerHeight - BUTTON_SIZE)
+  return { left: clamp(p.left, 0, maxLeft), bottom: clamp(p.bottom, 0, maxBottom) }
+}
+
 const STUDENT_SUGGESTIONS = [
   "Tugas apa yang belum aku kerjakan?",
   "Gimana perkembangan nilaiku?",
@@ -44,6 +65,68 @@ export function ChatbotWidget() {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Posisi bubble (bisa digeser). Disimpan sebagai jarak dari kiri & bawah viewport.
+  const [pos, setPos] = useState(DEFAULT_POS)
+  const posRef = useRef(DEFAULT_POS)
+  const draggingRef = useRef(false)
+  const draggedRef = useRef(false)
+  const dragStartRef = useRef({ pointerX: 0, pointerY: 0, left: 0, bottom: 0 })
+
+  function updatePos(next: { left: number; bottom: number }) {
+    posRef.current = next
+    setPos(next)
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    draggingRef.current = true
+    draggedRef.current = false
+    dragStartRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      left: posRef.current.left,
+      bottom: posRef.current.bottom,
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    if (!draggingRef.current) return
+    const dx = e.clientX - dragStartRef.current.pointerX
+    const dy = e.clientY - dragStartRef.current.pointerY
+    if (!draggedRef.current && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      draggedRef.current = true
+    }
+    if (!draggedRef.current) return
+    updatePos(
+      clampToViewport({
+        left: dragStartRef.current.left + dx,
+        bottom: dragStartRef.current.bottom - dy,
+      })
+    )
+  }
+
+  function handlePointerUp() {
+    draggingRef.current = false
+  }
+
+  function handleButtonClick() {
+    // Kalau baru saja selesai drag, jangan buka panel — itu bukan klik sungguhan.
+    if (draggedRef.current) {
+      draggedRef.current = false
+      return
+    }
+    setIsOpen(true)
+  }
+
+  // Panel dibuka menempel di posisi bubble saat ini, tapi tetap dijaga jangan sampai keluar layar.
+  const panelAnchor =
+    typeof window === "undefined"
+      ? pos
+      : {
+          left: clamp(pos.left, PANEL_MARGIN, Math.max(PANEL_MARGIN, window.innerWidth - PANEL_WIDTH - PANEL_MARGIN)),
+          bottom: clamp(pos.bottom, PANEL_MARGIN, Math.max(PANEL_MARGIN, window.innerHeight - PANEL_HEIGHT - PANEL_MARGIN)),
+        }
 
   const suggestions = user?.role === "teacher" ? TEACHER_SUGGESTIONS : STUDENT_SUGGESTIONS
 
@@ -131,13 +214,19 @@ export function ChatbotWidget() {
 
   return (
     <>
-      {/* Tombol mengambang */}
+      {/* Tombol mengambang — bisa digeser ke posisi mana saja */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
-          aria-label="Buka asisten"
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground
-                     shadow-lg flex items-center justify-center hover:scale-105 transition-transform
+          onClick={handleButtonClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          style={{ left: pos.left, bottom: pos.bottom, touchAction: "none" }}
+          aria-label="Buka asisten (bisa digeser)"
+          className="fixed z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground
+                     shadow-lg flex items-center justify-center cursor-grab active:cursor-grabbing
+                     hover:scale-105 transition-transform
                      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
                      focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:scale-100"
         >
@@ -150,9 +239,14 @@ export function ChatbotWidget() {
         <div
           role="dialog"
           aria-label="Asisten"
+          style={{
+            ["--chat-left" as string]: `${panelAnchor.left}px`,
+            ["--chat-bottom" as string]: `${panelAnchor.bottom}px`,
+          }}
           className="fixed z-50 bg-white border border-border shadow-xl flex flex-col
                      inset-x-0 bottom-0 h-[85vh] rounded-t-2xl
-                     sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[380px] sm:h-[540px] sm:rounded-2xl"
+                     sm:inset-auto sm:bottom-[var(--chat-bottom)] sm:left-[var(--chat-left)]
+                     sm:w-[380px] sm:h-[540px] sm:rounded-2xl"
         >
           {/* Header */}
           <div className="flex items-center gap-3 p-4 border-b border-border flex-shrink-0">

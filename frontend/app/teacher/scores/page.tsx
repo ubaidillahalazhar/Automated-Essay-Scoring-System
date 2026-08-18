@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState, useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
@@ -29,25 +29,29 @@ interface AttemptFromDB {
   completed_at: string
 }
 
-interface QuizOption {
-  quiz_id: number
-  title: string
-}
-
 export default function TeacherScores() {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [attempts, setAttempts] = useState<AttemptFromDB[]>([])
-  const [quizOptions, setQuizOptions] = useState<QuizOption[]>([])
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string>("")
   const [search, setSearch] = useState("")
-  const [filterQuiz, setFilterQuiz] = useState("all")
+  const [filterSubject, setFilterSubject] = useState("all")
+  const [filterGrade, setFilterGrade] = useState("all")
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "approved">("all")
 
   useEffect(() => {
     if (!isLoading && (!user || user.role !== "teacher")) router.replace("/login")
   }, [user, isLoading, router])
+
+  useEffect(() => {
+    const studentParam = searchParams.get("student")
+    if (studentParam) setSearch(studentParam)
+
+    const statusParam = searchParams.get("status")
+    if (statusParam === "pending" || statusParam === "approved") setFilterStatus(statusParam)
+  }, [searchParams])
 
   useEffect(() => {
     if (!user) return
@@ -66,7 +70,6 @@ export default function TeacherScores() {
           setAttempts([])
         } else {
           setAttempts(json.data || [])
-          setQuizOptions(json.quizzes || [])
         }
       } catch (err) {
         if (!cancelled) {
@@ -82,6 +85,15 @@ export default function TeacherScores() {
     return () => { cancelled = true }
   }, [user])
 
+  const subjectOptions = useMemo(() => {
+    return Array.from(new Set(attempts.map((a) => a.subject_name).filter(Boolean))).sort()
+  }, [attempts])
+
+  const gradeOptions = useMemo(() => {
+    return Array.from(new Set(attempts.map((a) => a.student_class).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'id', { numeric: true }))
+  }, [attempts])
+
   if (isLoading || !user) {
     return (
       <div className="flex min-h-screen bg-background">
@@ -94,7 +106,8 @@ export default function TeacherScores() {
   }
 
   const filtered = attempts.filter((a) => {
-    if (filterQuiz !== "all" && a.quiz_id !== parseInt(filterQuiz)) return false
+    if (filterSubject !== "all" && a.subject_name !== filterSubject) return false
+    if (filterGrade !== "all" && a.student_class !== filterGrade) return false
     if (filterStatus === "pending" && a.is_approved) return false
     if (filterStatus === "approved" && !a.is_approved) return false
     if (search) {
@@ -180,12 +193,21 @@ export default function TeacherScores() {
             />
           </div>
           <select
-            value={filterQuiz} onChange={(e) => setFilterQuiz(e.target.value)}
+            value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
             className="px-3 py-2 rounded-xl border border-input bg-white text-sm font-medium"
           >
-            <option value="all">Semua Kuis</option>
-            {quizOptions.map(q => (
-              <option key={q.quiz_id} value={q.quiz_id}>{q.title}</option>
+            <option value="all">Semua Mata Pelajaran</option>
+            {subjectOptions.map(subject => (
+              <option key={subject} value={subject}>{subject}</option>
+            ))}
+          </select>
+          <select
+            value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-input bg-white text-sm font-medium"
+          >
+            <option value="all">Semua Kelas</option>
+            {gradeOptions.map(grade => (
+              <option key={grade} value={grade}>{grade}</option>
             ))}
           </select>
         </div>

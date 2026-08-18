@@ -7,7 +7,7 @@ const {
   createQuizWithQuestions, addQuestionWithKey,
   getTeacherQuizzes, getAvailableQuizzes, getQuizQuestions,
   submitAnswers, getAttemptResult,
-  getStudentAttempts, getTeacherAttempts,
+  getStudentAttempts, getTeacherAttempts, getTeacherStudentsOverview,
   updateScore, approveScore, approveAllInAttempt,
   getQuizForEdit, updateQuizWithQuestions, deleteQuiz
 } = require('../controllers/examController');
@@ -21,6 +21,7 @@ router.post('/', authenticateToken, isTeacher, createQuizWithQuestions);
 router.post('/question', authenticateToken, isTeacher, addQuestionWithKey);
 router.get('/teacher/:teacher_id', authenticateToken, isTeacher, getTeacherQuizzes);
 router.get('/teacher/:teacher_id/attempts', authenticateToken, isTeacher, getTeacherAttempts);
+router.get('/teacher/:teacher_id/students', authenticateToken, isTeacher, getTeacherStudentsOverview);
 router.get('/teacher/:teacher_id/activity', authenticateToken, isTeacher, getActivityReport);
 
 router.get('/:quiz_id/edit', authenticateToken, isTeacher, getQuizForEdit);

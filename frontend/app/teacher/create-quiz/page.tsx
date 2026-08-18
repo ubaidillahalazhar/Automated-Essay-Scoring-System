@@ -55,13 +55,14 @@ export default function CreateQuizPage() {
   useEffect(() => {
     if (!user) return;
     const teacherId = user.id;
+    const teachingLevel = user.teaching_level || "SD";
 
     async function fetchMasterData() {
       try {
         const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        
-        // 1. Fetch Daftar Kelas
-        const resGrades = await apiFetch(`/api/grades`);
+
+        // 1. Fetch Daftar Kelas sesuai jenjang mengajar guru (SD/SMP/SMA)
+        const resGrades = await apiFetch(`/api/grades?level=${teachingLevel}`);
         const dataGrades = await resGrades.json();
         if (resGrades.ok && dataGrades.data) {
           setAvailableGrades(dataGrades.data);
@@ -177,8 +178,6 @@ export default function CreateQuizPage() {
 
   if (isLoading || !user) return null
 
-  const totalPoints = questions.reduce((s, q) => s + q.points, 0)
-
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
@@ -282,7 +281,6 @@ export default function CreateQuizPage() {
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="font-bold text-foreground">Soal ({questions.length})</h2>
-                  <p className="text-xs text-muted-foreground">Total: {totalPoints} poin</p>
                 </div>
                 <button
                   onClick={addQuestion}
@@ -305,7 +303,6 @@ export default function CreateQuizPage() {
                         <span className="text-sm font-semibold text-foreground">Soal {i + 1}</span>
                         {q.text && <span className="text-xs text-muted-foreground ml-2 truncate hidden sm:inline">— {q.text.slice(0, 50)}...</span>}
                       </div>
-                      <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full flex-shrink-0">{q.points} poin</span>
                       {expandedQ === q.id ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                     </button>
 
@@ -333,27 +330,16 @@ export default function CreateQuizPage() {
                           />
                           {errors[`q-${i}-answer`] && <p className="text-xs text-destructive mt-1">{errors[`q-${i}-answer`]}</p>}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Poin</label>
-                            <input
-                              type="number"
-                              min={1}
-                              max={100}
-                              value={q.points}
-                              onChange={(e) => updateQuestion(q.id, "points", Number(e.target.value))}
-                              className="w-20 px-3 py-1.5 rounded-lg border border-input bg-background text-foreground text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
-                            />
-                          </div>
-                          {questions.length > 1 && (
+                        {questions.length > 1 && (
+                          <div className="flex items-center justify-end">
                             <button
                               onClick={() => removeQuestion(q.id)}
                               className="flex items-center gap-1.5 text-xs font-medium text-destructive hover:text-destructive/80 transition-colors"
                             >
                               <Trash2 className="w-3.5 h-3.5" /> Hapus Soal
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
