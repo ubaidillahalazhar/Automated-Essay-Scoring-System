@@ -125,7 +125,7 @@ export default function StudentAssignments() {
           <h1 className="text-2xl font-bold text-foreground mb-1">Tugas Saya</h1>
           <p className="text-muted-foreground">
             {studentInfo
-              ? `Daftar kuis untuk jenjang ${studentInfo.school_level} (kamu di ${studentInfo.grade_name}).`
+              ? `Daftar kuis untuk ${studentInfo.grade_name}.`
               : "Daftar kuis yang tersedia untukmu."}
           </p>
         </div>
@@ -179,7 +179,7 @@ export default function StudentAssignments() {
                 ? "Tidak ada kuis aktif. Semua sudah selesai atau lewat batas waktu."
                 : filter === "completed"
                 ? "Belum ada kuis yang sudah dikerjakan atau lewat batas waktu."
-                : `Belum ada kuis untuk jenjang ${studentInfo.school_level} saat ini.`}
+                : `Belum ada kuis untuk ${studentInfo.grade_name} saat ini.`}
             </p>
           </div>
         ) : (

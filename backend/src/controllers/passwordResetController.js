@@ -5,18 +5,17 @@ const { generateOtp, getOtpExpiry, isOtpExpired } = require('../utils/otpUtils')
 const { sendResetPasswordEmail } = require('../utils/emailUtils');
 const { AppError } = require('../middleware/errorHandler');
 const logger = require('../utils/loggerUtils');
+const { invalidateUserCache } = require('../middleware/authMiddleware');
 
 const MAX_OTP_ATTEMPTS = 5;
 const RESET_TOKEN_TTL_MINUTES = parseInt(process.env.RESET_TOKEN_TTL_MINUTES || '10', 10);
 
-// Pesan seragam supaya penyerang tidak bisa menebak email mana yang terdaftar.
-const GENERIC_MESSAGE = "Jika email terdaftar, kode OTP reset password sudah kami kirim.";
+const SUCCESS_MESSAGE = "Kode OTP reset password sudah dikirim ke email Anda.";
 
 const cleanEmail = (email) => String(email || '').trim();
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const getTokenExpiry = () => new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60 * 1000);
 
-/** Perbandingan string yang aman dari timing attack. */
 const safeEqual = (a, b) => {
   const bufA = Buffer.from(String(a || ''));
   const bufB = Buffer.from(String(b || ''));
@@ -34,11 +33,16 @@ const forgotPassword = async (req, res) => {
     where: { otp_expires_at: { lt: new Date(Date.now() - 60 * 60 * 1000) } }
   });
 
-  const userDetail = await prisma.userDetail.findUnique({ where: { email } });
+const userDetail = await prisma.userDetail.findUnique({ where: { email } });
 
-  if (!userDetail || !userDetail.is_active) {
-    logger.warn(`Permintaan reset password untuk email tidak aktif/tidak terdaftar: ${email}`);
-    return res.status(200).json({ status: "success", message: GENERIC_MESSAGE });
+  if (!userDetail) {
+    logger.warn(`Permintaan reset password untuk email tidak terdaftar: ${email}`);
+    throw new AppError("Email tidak terdaftar. Periksa kembali penulisannya.", 404);
+  }
+
+  if (!userDetail.is_active) {
+    logger.warn(`Permintaan reset password untuk akun nonaktif: ${email}`);
+    throw new AppError("Akun ini tidak aktif. Silakan hubungi admin sekolah.", 403);
   }
 
   const otpCode = generateOtp();
@@ -58,10 +62,9 @@ const forgotPassword = async (req, res) => {
 
   await sendResetPasswordEmail(email, otpCode);
 
-  res.status(200).json({ status: "success", message: GENERIC_MESSAGE });
+  res.status(200).json({ status: "success", message: SUCCESS_MESSAGE });
 };
 
-// 2. VERIFIKASI OTP → TUKAR DENGAN RESET TOKEN
 const verifyResetOtp = async (req, res) => {
   const email = cleanEmail(req.body.email);
   const otp = String(req.body.otp || '').trim();
@@ -147,10 +150,17 @@ const resetPassword = async (req, res) => {
   await prisma.$transaction([
     prisma.userDetail.update({
       where: { email },
-      data: { password_hash: newHashed, updated_at: new Date() }
+      data: {
+        password_hash: newHashed,
+        password_changed_at: new Date(),
+        updated_at: new Date()
+      }
     }),
     prisma.passwordReset.delete({ where: { email } })
   ]);
+
+  // Semua token JWT yang terbit sebelum detik ini otomatis ditolak middleware.
+  invalidateUserCache(userDetail.user_id);
 
   logger.info(`Password berhasil direset untuk ${email}`);
 

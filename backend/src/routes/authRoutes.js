@@ -6,7 +6,8 @@ const {
   getProfile, updateProfile, changePassword
 } = require('../controllers/authController');
 const {
-  loginByEmail, loginByIp, captchaByIp
+  loginByEmail, loginByIp, captchaByIp,
+  forgotPasswordByEmail, forgotPasswordByIp, verifyResetOtpByIp
 } = require('../middleware/rateLimitMiddleware');
 const {
   forgotPassword, verifyResetOtp, resetPassword
@@ -19,8 +20,8 @@ router.get('/captcha/image/:id', getCaptchaImage);   // ← baru
 router.post('/login', loginByIp, loginByEmail, login);
 router.post('/captcha/verify', captchaByIp, verifyCaptchaChallenge)
 
-router.post('/forgot-password', forgotPassword);
-router.post('/verify-reset-otp', verifyResetOtp);
+router.post('/forgot-password', forgotPasswordByIp, forgotPasswordByEmail, forgotPassword);
+router.post('/verify-reset-otp', verifyResetOtpByIp, verifyResetOtp);
 router.post('/reset-password', resetPassword);
 
 router.get('/profile/:user_id', authenticateToken, getProfile);

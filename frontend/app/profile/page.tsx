@@ -2,19 +2,18 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { apiFetch } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { Sidebar } from "@/components/shared/sidebar"
 import {
-	User, Pencil, BarChart3, Settings, Loader2,
+	User, Pencil, Settings, Loader2,
 	CheckCircle2, AlertCircle, X, Save, Eye, EyeOff,
-	Trophy, TrendingUp, Award, Target, BookOpen, Users as UsersIcon,
+	Users as UsersIcon,
 	LogOut, Mail, GraduationCap, Calendar
 } from "lucide-react"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-type TabId = "profile" | "edit" | "stats" | "settings"
+type TabId = "profile" | "edit" | "settings"
 
 interface TabConfig {
 	id: TabId
@@ -25,7 +24,6 @@ interface TabConfig {
 const TABS: TabConfig[] = [
 	{ id: "profile",  label: "Profile",       icon: <User className="w-4 h-4" /> },
 	{ id: "edit",     label: "Edit Profile",  icon: <Pencil className="w-4 h-4" /> },
-	{ id: "stats",    label: "Statistik",     icon: <BarChart3 className="w-4 h-4" /> },
 	{ id: "settings", label: "Pengaturan",    icon: <Settings className="w-4 h-4" /> },
 ]
 
@@ -33,20 +31,6 @@ interface Grade {
 	grade_id: number
 	grade_name: string
 	school_level: string
-}
-
-interface StudentStats {
-	totalAttempts: number
-	avgScore: number
-	bestScore: number
-	subjectStats: Array<{ subject_name: string; avgScore: number; count: number }>
-}
-
-interface TeacherStats {
-	totalQuizzes: number
-	totalAttempts: number
-	uniqueStudents: number
-	avgClassScore: number
 }
 
 export default function ProfilePage() {
@@ -113,7 +97,6 @@ export default function ProfilePage() {
 					<div>
 						{activeTab === "profile" && <ProfileTab />}
 						{activeTab === "edit" && <EditProfileTab />}
-						{activeTab === "stats" && <StatsTab />}
 						{activeTab === "settings" && <SettingsTab onLogout={logout} />}
 					</div>
 				</div>
@@ -529,202 +512,7 @@ function EditProfileTab() {
 }
 
 // ═════════════════════════════════════════════════════════════════
-// TAB 3: STATISTIK
-// ═════════════════════════════════════════════════════════════════
-function StatsTab() {
-	const { user } = useAuth()
-	if (!user) return null
-
-	return user.role === "student" ? <StudentStatsView /> : <TeacherStatsView />
-}
-
-function StudentStatsView() {
-	const { user } = useAuth()
-	const [stats, setStats] = useState<StudentStats | null>(null)
-	const [loading, setLoading] = useState(true)
-
-	useEffect(() => {
-		if (!user) return
-		const userId = user.id
-		apiFetch(`/api/exams/student/${userId}/attempts`)
-			.then(r => r.json())
-			.then(data => {
-				if (!data.data) return
-				const attempts = (data.data as any[]).filter(
-					a => a.is_approved && typeof a.total_score === "number"
-				)
-				const scores = attempts.map((a: any) => a.total_score)
-				const avg = scores.length ? Math.round(scores.reduce((s: number, v: number) => s + v, 0) / scores.length) : 0
-				const best = scores.length ? Math.max(...scores) : 0
-
-				// Group by subject
-				const subjectMap = new Map<string, { total: number; count: number }>()
-				for (const a of attempts) {
-					const subj = a.subject_name || "Lainnya"
-					const existing = subjectMap.get(subj) || { total: 0, count: 0 }
-					subjectMap.set(subj, {
-						total: existing.total + a.total_score,
-						count: existing.count + 1
-					})
-				}
-				const subjectStats = Array.from(subjectMap.entries()).map(([subject_name, val]) => ({
-					subject_name,
-					avgScore: Math.round(val.total / val.count),
-					count: val.count
-				})).sort((a, b) => b.avgScore - a.avgScore)
-
-				setStats({
-					totalAttempts: attempts.length,
-					avgScore: avg,
-					bestScore: Math.round(best),
-					subjectStats
-				})
-			})
-			.catch(err => console.error("Gagal load stats:", err))
-			.finally(() => setLoading(false))
-	}, [user])
-
-	if (loading) {
-		return (
-			<div className="bg-white rounded-2xl border border-border p-12 flex items-center justify-center">
-				<Loader2 className="w-8 h-8 text-primary animate-spin" />
-			</div>
-		)
-	}
-
-	if (!stats || stats.totalAttempts === 0) {
-		return (
-			<div className="bg-white rounded-2xl border border-border p-10 text-center">
-				<Trophy className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
-				<p className="font-semibold text-foreground mb-1">Belum ada statistik</p>
-				<p className="text-sm text-muted-foreground">
-					Selesaikan kuis pertamamu untuk melihat statistik di sini.
-				</p>
-			</div>
-		)
-	}
-
-	return (
-		<div className="space-y-6">
-			{/* Stat cards */}
-			<div className="grid grid-cols-3 gap-4">
-				<StatCard icon={<Trophy className="w-5 h-5 text-primary" />} value={stats.totalAttempts} label="Kuis Selesai" />
-				<StatCard icon={<TrendingUp className="w-5 h-5 text-amber-600" />} value={stats.avgScore} label="Rata-rata Nilai" />
-				<StatCard icon={<Award className="w-5 h-5 text-green-600" />} value={stats.bestScore} label="Nilai Tertinggi" />
-			</div>
-
-			{/* Stats per subject */}
-			{stats.subjectStats.length > 0 && (
-				<div className="bg-white rounded-2xl border border-border p-5">
-					<h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
-						<BookOpen className="w-4 h-4 text-primary" /> Performa per Mata Pelajaran
-					</h3>
-					<div className="space-y-3">
-						{stats.subjectStats.map((s) => (
-							<div key={s.subject_name}>
-								<div className="flex items-center justify-between mb-1">
-									<span className="text-sm font-semibold text-foreground">{s.subject_name}</span>
-									<span className="text-xs text-muted-foreground">
-										{s.count} kuis · rata-rata {s.avgScore}
-									</span>
-								</div>
-								<div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-									<div
-										className={`h-full rounded-full transition-all ${
-											s.avgScore >= 80 ? "bg-green-500" :
-											s.avgScore >= 60 ? "bg-yellow-500" : "bg-red-500"
-										}`}
-										style={{ width: `${s.avgScore}%` }}
-									/>
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
-		</div>
-	)
-}
-
-function TeacherStatsView() {
-	const { user } = useAuth()
-	const [stats, setStats] = useState<TeacherStats | null>(null)
-	const [loading, setLoading] = useState(true)
-
-	useEffect(() => {
-		if (!user) return
-		const userId = user.id
-
-		Promise.all([
-			apiFetch(`/api/exams/teacher/${userId}`).then(r => r.json()),
-			apiFetch(`/api/exams/teacher/${userId}/attempts`).then(r => r.json())
-		]).then(([quizzesRes, attemptsRes]) => {
-			const quizzes = quizzesRes.data || []
-			const attempts = attemptsRes.data || []
-			const uniqueStudents = new Set(attempts.map((a: any) => a.student_id)).size
-			const scored = attempts.filter((a: any) => typeof a.total_score === "number")
-			const avg = attempts.length
-				? Math.round(attempts.reduce((s: number, a: any) => s + a.total_score, 0) / attempts.length)
-				: 0
-
-			setStats({
-				totalQuizzes: quizzes.length,
-				totalAttempts: attempts.length,
-				uniqueStudents,
-				avgClassScore: avg
-			})
-		}).catch(err => console.error("Gagal load stats:", err))
-			.finally(() => setLoading(false))
-	}, [user])
-
-	if (loading) {
-		return (
-			<div className="bg-white rounded-2xl border border-border p-12 flex items-center justify-center">
-				<Loader2 className="w-8 h-8 text-primary animate-spin" />
-			</div>
-		)
-	}
-
-	if (!stats) return null
-
-	return (
-		<div className="space-y-6">
-			<div className="grid grid-cols-2 gap-4">
-				<StatCard icon={<BookOpen className="w-5 h-5 text-primary" />} value={stats.totalQuizzes} label="Total Kuis Dibuat" />
-				<StatCard icon={<UsersIcon className="w-5 h-5 text-blue-600" />} value={stats.uniqueStudents} label="Siswa Unik" />
-				<StatCard icon={<Target className="w-5 h-5 text-amber-600" />} value={stats.totalAttempts} label="Total Pengerjaan" />
-				<StatCard icon={<TrendingUp className="w-5 h-5 text-green-600" />} value={stats.avgClassScore} label="Rata-rata Kelas" />
-			</div>
-
-			{stats.totalAttempts === 0 && (
-				<div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
-					<AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-					<div>
-						<p className="text-sm font-semibold text-amber-900">Belum ada siswa yang mengerjakan</p>
-						<p className="text-xs text-amber-700 mt-0.5">
-							Statistik akan terisi setelah siswa mulai mengumpulkan kuis Anda.
-						</p>
-					</div>
-				</div>
-			)}
-		</div>
-	)
-}
-
-function StatCard({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
-	return (
-		<div className="bg-white rounded-2xl border border-border p-4">
-			<div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-				{icon}
-			</div>
-			<p className="text-2xl font-bold text-foreground">{value}</p>
-			<p className="text-xs text-muted-foreground">{label}</p>
-		</div>
-	)
-}
-
-// ═════════════════════════════════════════════════════════════════
-// TAB 4: PENGATURAN (ganti password + logout)
+// TAB 3: PENGATURAN (ganti password + logout)
 // ═════════════════════════════════════════════════════════════════
 function SettingsTab({ onLogout }: { onLogout: () => void }) {
 	const { changePassword } = useAuth()
