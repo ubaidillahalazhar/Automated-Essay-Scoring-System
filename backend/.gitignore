@@ -19,3 +19,11 @@ generated/prisma/
 # =========================================
 *.log
 npm-debug.log*
+GROQ_API_KEY=***REDACTED_GROQ_API_KEY***
+GEMINI_API_KEY=***REDACTED_GEMINI_API_KEY***
+CHAT_DEFAULT_PROVIDER=groq
+CHAT_STRICT_SCOPE=false
+CAPTCHA_MODE=image
+RECAPTCHA_SITE_KEY=isi_site_key_dari_google
+RECAPTCHA_SECRET_KEY=isi_secret_key_dari_google
+RECAPTCHA_MIN_SCORE=0.5.env
