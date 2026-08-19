@@ -1,14 +1,6 @@
-
-// role_id sesuai DB: 1=admin, 2=teacher, 3=student
 const ROLE = { ADMIN: 1, TEACHER: 2, STUDENT: 3 };
 
 /**
- * Factory middleware: hanya izinkan role tertentu.
- * Mendukung banyak role sekaligus.
- *
- *   requireRole(ROLE.TEACHER)              -> hanya guru
- *   requireRole(ROLE.TEACHER, ROLE.ADMIN) -> guru ATAU admin
- *
  * @param  {...number} allowedRoles Daftar role_id yang diizinkan.
  * @returns {import('express').RequestHandler}
  */
