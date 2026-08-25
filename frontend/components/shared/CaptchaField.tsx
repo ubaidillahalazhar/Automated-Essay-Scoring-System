@@ -299,11 +299,14 @@ export const CaptchaField = forwardRef<CaptchaFieldHandle, CaptchaFieldProps>(fu
 
   useImperativeHandle(ref, () => ({
     reload: () => {
-      // Widget v2 punya cara reset sendiri; tidak perlu ambil soal baru ke server.
+      // Widget v2 punya cara reset sendiri; tapi server token (captchaToken)
+      // tetap harus diambil ulang karena token lama sudah terpakai (anti-replay).
       if (mode === "recaptcha" && recaptchaVersion === "v2" && v2WidgetId.current !== null) {
         try { window.grecaptcha?.reset(v2WidgetId.current) } catch { /* abaikan */ }
         setV2Token("")
         onValueChange("")
+        // Ambil server token baru supaya tidak kena anti-replay "sudah terpakai"
+        fetchChallenge(false)
         return
       }
       reset()
