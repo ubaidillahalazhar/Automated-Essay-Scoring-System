@@ -8,8 +8,10 @@ const logger = require('../utils/loggerUtils');
  * @returns {{skor10: number, skor100: number}}
  */
 function normalizeAiScore(aiResult) {
-  const skor10 = Math.max(0, Math.min(10, Number(aiResult?.skor) || 0));
-  const skor100 = Math.round(skor10 * 10 * 100) / 100;
+  // AI service returns skor on 0.0–1.0 scale
+  const skorRaw = Math.max(0, Math.min(1, Number(aiResult?.skor) || 0));
+  const skor10  = Math.round(skorRaw * 10 * 100) / 100;   // 0–10 scale
+  const skor100 = Math.round(skorRaw * 100 * 100) / 100;  // 0–100 scale
   return { skor10, skor100 };
 }
 
@@ -53,7 +55,7 @@ async function gradeAndSaveScore(answer, question) {
       Math.abs(aiResult.nilai_100 - skor100) > 0.01
     ) {
       logger.warn(
-        `AI nilai_100 inkonsisten dengan skor*10 ` +
+        `AI nilai_100 inkonsisten dengan skor*100 ` +
         `(skor=${aiResult.skor}, nilai_100=${aiResult.nilai_100}, dipakai=${skor100}). ` +
         `answer_id=${answer.answer_id}`
       );
